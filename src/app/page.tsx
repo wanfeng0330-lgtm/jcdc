@@ -1,7 +1,7 @@
 'use client';
 
 import { motion, useScroll, useTransform } from 'framer-motion';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   ShieldCheck,
@@ -46,18 +46,38 @@ const features = [
   },
 ];
 
-const stats = [
-  { label: '今日检测', value: '12,847' },
-  { label: '风险拦截', value: '4,462' },
-  { label: '识别率', value: '92.1%' },
-  { label: '用户免疫提升', value: '67%' },
-];
-
 export default function HomePage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: containerRef });
   const heroOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
   const heroScale = useTransform(scrollYProgress, [0, 0.3], [1, 0.95]);
+
+  // 从API获取真实统计数据
+  const [stats, setStats] = useState([
+    { label: '今日检测', value: '—' },
+    { label: '风险拦截', value: '—' },
+    { label: '识别率', value: '—' },
+    { label: '用户免疫提升', value: '—' },
+  ]);
+
+  useEffect(() => {
+    fetch('/api/dashboard')
+      .then(res => res.json())
+      .then(json => {
+        if (json.success && json.data) {
+          const d = json.data;
+          setStats([
+            { label: '今日检测', value: d.todayChecks.toLocaleString() },
+            { label: '风险拦截', value: d.aiRiskRatio > 0 ? Math.round(d.todayChecks * d.aiRiskRatio / 100).toLocaleString() : '0' },
+            { label: '识别率', value: `${d.aiDetectionRate}%` },
+            { label: '用户免疫提升', value: d.userMisjudgeRate > 0 ? `${Math.max(0, 100 - Math.round(d.userMisjudgeRate))}%` : '—' },
+          ]);
+        }
+      })
+      .catch(() => {
+        // 保持默认值
+      });
+  }, []);
 
   return (
     <div ref={containerRef} className="min-h-dvh bg-background overflow-hidden">

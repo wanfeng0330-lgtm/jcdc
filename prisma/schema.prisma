@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// AI内容分析记录 - 从 /api/analyze 产生
+model AnalysisRecord {
+  id          String   @id @default(cuid())
+  type        String   // text | image | audio
+  riskLevel   String   // low | medium | high | critical
+  riskScore   Float    // 0-100
+  isAIGenerated Boolean // 是否为AI生成
+  riskTypes   String   // JSON array: ["AI拟声","AI换脸",...]
+  source      String   @default("ai") // ai | fallback
+  createdAt   DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([type])
+  @@index([riskLevel])
+}
+
+// 媒介素养测试结果 - 从 /api/lab 产生
+model LabResult {
+  id            String   @id @default(cuid())
+  totalQuestions Int
+  correctCount  Int
+  overallScore  Int      // 0-100
+  level         String   // 新手|初级|中级|高级|专家
+  createdAt     DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+// 新闻缓存 - 从 Tavily API 获取的AI风险相关新闻
+model NewsItem {
+  id          String   @id @default(cuid())
+  title       String
+  url         String
+  content     String   @default("")
+  sourceName  String   @default("")
+  publishedAt String   @default("")
+  category    String   @default("ai_risk") // ai_risk | rumor | fraud
+  fetchedAt   DateTime @default(now())
+
+  @@index([category])
+  @@index([fetchedAt])
+}
+
+// 每日统计汇总 - 由定时任务聚合
+model DailyStat {
+  id             String   @id @default(cuid())
+  date           String   @unique // YYYY-MM-DD
+  totalChecks    Int      @default(0)
+  riskCount      Int      @default(0)
+  avgRiskScore   Float    @default(0)
+  aiGeneratedCount Int    @default(0)
+  labParticipants Int     @default(0)
+  labAvgScore    Float    @default(0)
+  // 风险类型分布 JSON
+  riskTypeDist   String   @default("{}")
+  // 高频诈骗统计 JSON
+  highFreqScams  String   @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}

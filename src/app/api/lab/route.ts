@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
 import { chatCompletion, LAB_SYSTEM_PROMPT } from '@/lib/ai';
+import { recordLabResult } from '@/lib/data-service';
+
+// 强制动态渲染 - 数据库操作需要运行时环境
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
@@ -22,6 +26,17 @@ export async function POST(request: Request) {
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const result = JSON.parse(jsonMatch[0]);
+
+        // 记录实验室结果到数据库
+        recordLabResult({
+          totalQuestions: totalQuestions || 0,
+          correctCount: correctCount || 0,
+          overallScore: result.overallScore || 0,
+          level: result.level || '中级',
+        }).catch((err) => {
+          console.error('Failed to record lab result:', err);
+        });
+
         return NextResponse.json({ success: true, data: result, source: 'ai' });
       }
     } catch {
@@ -32,6 +47,16 @@ export async function POST(request: Request) {
     const score = Math.round((correctCount / totalQuestions) * 100);
     const level = score >= 90 ? '专家' : score >= 75 ? '高级' : score >= 60 ? '中级' : score >= 40 ? '初级' : '新手';
     const levelDesc = score >= 90 ? '你具有极强的AI风险识别能力' : score >= 75 ? '你的AI风险识别能力较强' : score >= 60 ? '你的AI风险识别能力中等' : score >= 40 ? '你需要提高AI风险识别能力' : '你容易被AI生成内容欺骗';
+
+    // 记录实验室结果到数据库
+    recordLabResult({
+      totalQuestions: totalQuestions || 0,
+      correctCount: correctCount || 0,
+      overallScore: score,
+      level,
+    }).catch((err) => {
+      console.error('Failed to record lab result:', err);
+    });
 
     return NextResponse.json({
       success: true,
