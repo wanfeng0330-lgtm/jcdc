@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Image as ImageIcon,
@@ -21,6 +21,8 @@ import {
   ShieldAlert,
   Upload,
   ArrowLeft,
+  X,
+  File,
   type LucideIcon,
 } from 'lucide-react';
 import PageContainer, { PageHeader } from '@/components/PageContainer';
@@ -33,12 +35,12 @@ import type { AnalysisResult } from '@/lib/mock-data';
 type FileType = 'image' | 'video' | 'audio' | 'text' | 'screenshot';
 type AnalysisPhase = 'idle' | 'uploading' | 'analyzing' | 'result';
 
-const fileTypes: { type: FileType; icon: LucideIcon; label: string }[] = [
-  { type: 'image', icon: ImageIcon, label: '图片' },
-  { type: 'video', icon: Video, label: '视频' },
-  { type: 'audio', icon: Mic, label: '音频' },
-  { type: 'text', icon: FileText, label: '文本' },
-  { type: 'screenshot', icon: Smartphone, label: '截图' },
+const fileTypes: { type: FileType; icon: LucideIcon; label: string; accept: string }[] = [
+  { type: 'image', icon: ImageIcon, label: '图片', accept: 'image/*' },
+  { type: 'video', icon: Video, label: '视频', accept: 'video/*' },
+  { type: 'audio', icon: Mic, label: '音频', accept: 'audio/*' },
+  { type: 'text', icon: FileText, label: '文本', accept: '' },
+  { type: 'screenshot', icon: Smartphone, label: '截图', accept: 'image/*' },
 ];
 
 type StepStatus = 'pending' | 'active' | 'done';
@@ -52,14 +54,55 @@ const initialSteps: { label: string; icon: LucideIcon; status: StepStatus }[] = 
   { label: '传播学风险评估', icon: RefreshCw, status: 'pending' },
 ];
 
+// 预设演示内容
+const demoContents: Record<FileType, string> = {
+  image: '一张在微信群传播的截图：某"官方机构"发布紧急通知，要求所有市民在48小时内完成身份认证，否则将冻结账户。截图带有伪造的公章和红色紧急标签。',
+  video: '一段在短视频平台流传的视频：某知名企业家在视频中宣布公司即将倒闭，呼吁投资者尽快撤资。视频画面清晰但面部边缘偶有闪烁。',
+  audio: '一条语音消息："妈，我出事了，赶紧给我转5万块！我现在不方便说话，你赶紧转到这个账号6228xxxx。"语音声音与本人相似但语气急促不自然。',
+  screenshot: '一条短信截图：来自"95588"的银行短信，称"您的账户存在异常，请立即点击 http://xxx.bank-verify.com 进行验证，否则账户将被冻结"。',
+  text: '震惊！某市财政局紧急通知：所有退休人员必须在3天内完成社保认证，否则停发养老金！这是刚刚从内部渠道拿到的消息，请大家互相转告，不要耽误了！转发让更多人知道！',
+};
+
 export default function AnalyzePage() {
   const [phase, setPhase] = useState<AnalysisPhase>('idle');
   const [selectedType, setSelectedType] = useState<FileType>('image');
   const [inputText, setInputText] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [currentSteps, setCurrentSteps] = useState(initialSteps);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeTab, setActiveTab] = useState<'score' | 'radar' | 'detail'>('score');
   const [analysisSource, setAnalysisSource] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 是否有内容可以分析
+  const hasContent = selectedType === 'text' ? inputText.trim().length > 0 : selectedFile !== null;
+
+  const handleFileSelect = useCallback((file: File) => {
+    setSelectedFile(file);
+    setPhase('uploading');
+    // 模拟上传过程
+    setTimeout(() => {
+      setPhase('idle');
+    }, 800);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) handleFileSelect(file);
+  }, [handleFileSelect]);
+
+  const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFileSelect(file);
+  }, [handleFileSelect]);
+
+  const clearFile = useCallback(() => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, []);
 
   const advanceSteps = useCallback((onComplete: () => void) => {
     setCurrentSteps(initialSteps.map((s) => ({ ...s, status: 'pending' as StepStatus })));
@@ -82,12 +125,11 @@ export default function AnalyzePage() {
     }, 800);
   }, []);
 
-  const startAnalysis = useCallback(async () => {
+  const startAnalysis = useCallback(async (content: string) => {
+    if (!content.trim()) return;
+
     setPhase('analyzing');
     setAnalysisSource('');
-
-    // Run step animation and API call in parallel
-    const content = inputText.trim() || '';
 
     advanceSteps(async () => {
       try {
@@ -120,14 +162,21 @@ export default function AnalyzePage() {
         setPhase('result');
       }, 300);
     });
-  }, [inputText, selectedType, advanceSteps]);
+  }, [selectedType, advanceSteps]);
+
+  const startDemoAnalysis = useCallback(() => {
+    const demoContent = demoContents[selectedType];
+    startAnalysis(demoContent);
+  }, [selectedType, startAnalysis]);
 
   const reset = useCallback(() => {
     setPhase('idle');
     setResult(null);
     setInputText('');
+    setSelectedFile(null);
     setCurrentSteps(initialSteps);
     setAnalysisSource('');
+    if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
   const riskFactorIcons: Record<string, LucideIcon> = {
@@ -139,12 +188,24 @@ export default function AnalyzePage() {
     spread: Network,
   };
 
+  // 获取当前类型的accept属性
+  const currentAccept = fileTypes.find((f) => f.type === selectedType)?.accept || '';
+
   return (
     <PageContainer>
       <PageHeader
         title="AI内容可信度分析"
         subtitle="多维度检测AI生成内容，识别信息风险"
         icon="◎"
+      />
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={currentAccept}
+        onChange={handleFileInput}
+        className="hidden"
       />
 
       <AnimatePresence mode="wait">
@@ -165,7 +226,11 @@ export default function AnalyzePage() {
                   return (
                     <button
                       key={ft.type}
-                      onClick={() => setSelectedType(ft.type)}
+                      onClick={() => {
+                        setSelectedType(ft.type);
+                        setSelectedFile(null);
+                        if (fileInputRef.current) fileInputRef.current.value = '';
+                      }}
                       className={`flex-1 py-3 px-2 rounded-xl text-center transition-all ${
                         selectedType === ft.type
                           ? 'bg-accent/15 border border-accent/30 text-accent'
@@ -180,34 +245,84 @@ export default function AnalyzePage() {
               </div>
             </div>
 
-            {/* Upload Area */}
-            <motion.div
-              className="glass-card-sm p-6 border-2 border-dashed border-accent/20 hover:border-accent/40 transition-colors cursor-pointer"
-              whileHover={{ scale: 1.01 }}
-              whileTap={{ scale: 0.99 }}
-              onClick={startAnalysis}
-            >
-              <div className="text-center">
-                <motion.div
-                  animate={{ y: [0, -8, 0] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="mb-3"
-                >
-                  {(() => {
-                    const IconComp = fileTypes.find((f) => f.type === selectedType)?.icon || ImageIcon;
-                    return <IconComp size={36} className="mx-auto text-accent" strokeWidth={1.5} />;
-                  })()}
-                </motion.div>
-                <p className="text-sm text-foreground/70 mb-1">
-                  点击上传或拖拽文件
-                </p>
-                <p className="text-xs text-muted">
-                  支持 {fileTypes.find((f) => f.type === selectedType)?.label} 格式
-                </p>
+            {/* Upload Area - for non-text types */}
+            {selectedType !== 'text' && (
+              <div>
+                {selectedFile ? (
+                  /* File selected preview */
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="glass-card-sm p-4"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+                        {(() => {
+                          const TypeIcon = fileTypes.find((f) => f.type === selectedType)?.icon || File;
+                          return <TypeIcon size={20} className="text-accent" strokeWidth={1.5} />;
+                        })()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-foreground truncate">{selectedFile.name}</p>
+                        <p className="text-[10px] text-muted">
+                          {(selectedFile.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                      <button onClick={clearFile} className="p-1.5 rounded-lg hover:bg-white/5 text-muted">
+                        <X size={14} strokeWidth={1.5} />
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => {
+                        // 将文件名作为内容描述发给AI
+                        const fileDesc = `[${fileTypes.find(f => f.type === selectedType)?.label}文件] ${selectedFile.name}`;
+                        startAnalysis(fileDesc);
+                      }}
+                      className="w-full mt-3 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium inline-flex items-center justify-center gap-2"
+                    >
+                      <Search size={14} strokeWidth={1.5} />
+                      开始AI分析
+                    </button>
+                  </motion.div>
+                ) : (
+                  /* Upload dropzone */
+                  <motion.div
+                    className={`glass-card-sm p-6 border-2 border-dashed transition-colors cursor-pointer ${
+                      isDragging
+                        ? 'border-accent/60 bg-accent/5'
+                        : 'border-accent/20 hover:border-accent/40'
+                    }`}
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={() => fileInputRef.current?.click()}
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                  >
+                    <div className="text-center">
+                      <motion.div
+                        animate={{ y: [0, -8, 0] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="mb-3"
+                      >
+                        {(() => {
+                          const IconComp = fileTypes.find((f) => f.type === selectedType)?.icon || ImageIcon;
+                          return <IconComp size={36} className="mx-auto text-accent" strokeWidth={1.5} />;
+                        })()}
+                      </motion.div>
+                      <p className="text-sm text-foreground/70 mb-1">
+                        {isDragging ? '松开即可上传' : '点击选择或拖拽文件'}
+                      </p>
+                      <p className="text-xs text-muted">
+                        支持 {fileTypes.find((f) => f.type === selectedType)?.label} 格式
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
               </div>
-            </motion.div>
+            )}
 
-            {/* Or Text Input */}
+            {/* Text Input - for text type */}
             {selectedType === 'text' && (
               <div className="glass-card-sm p-4">
                 <textarea
@@ -217,23 +332,48 @@ export default function AnalyzePage() {
                   className="w-full h-32 bg-transparent text-sm text-foreground/80 placeholder-muted/50 resize-none outline-none"
                 />
                 <button
-                  onClick={startAnalysis}
+                  onClick={() => startAnalysis(inputText)}
                   disabled={!inputText.trim()}
-                  className="w-full mt-2 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium disabled:opacity-30 transition-opacity"
+                  className="w-full mt-2 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
                 >
                   开始AI分析
                 </button>
               </div>
             )}
 
-            {/* Quick Demo */}
-            <button
-              onClick={startAnalysis}
-              className="w-full py-3 rounded-xl glass-card text-accent text-sm font-medium inline-flex items-center justify-center gap-2"
+            {/* Demo Analysis */}
+            <div className="glass-card-sm p-4">
+              <p className="text-xs text-muted mb-3">没有内容？试试 AI 演示分析</p>
+              <button
+                onClick={startDemoAnalysis}
+                className="w-full py-3 rounded-xl bg-white/[0.03] border border-accent/15 text-accent text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-accent/5 transition-colors"
+              >
+                <Upload size={14} strokeWidth={1.5} />
+                使用示例内容体验分析
+              </button>
+              <p className="text-[10px] text-muted/50 mt-2 text-center">
+                将使用预设的{fileTypes.find(f => f.type === selectedType)?.label}示例场景进行AI检测演示
+              </p>
+            </div>
+          </motion.div>
+        )}
+
+        {phase === 'uploading' && (
+          <motion.div
+            key="uploading"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="glass-card-sm p-6 text-center"
+          >
+            <motion.div
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ duration: 1.5, repeat: Infinity }}
+              className="w-16 h-16 rounded-2xl bg-accent/10 mx-auto flex items-center justify-center mb-4"
             >
-              <Upload size={14} strokeWidth={1.5} />
-              体验演示分析
-            </button>
+              <Upload size={24} className="text-accent" strokeWidth={1.5} />
+            </motion.div>
+            <p className="text-sm text-foreground/70">文件上传中...</p>
           </motion.div>
         )}
 
