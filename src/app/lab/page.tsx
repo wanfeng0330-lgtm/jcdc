@@ -2,11 +2,32 @@
 
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  FlaskConical,
+  ScanFace,
+  Mic,
+  Newspaper,
+  Brain,
+  Target,
+  AlertTriangle,
+  Lightbulb,
+  RotateCcw,
+  Share2,
+  ChevronRight,
+  type LucideIcon,
+} from 'lucide-react';
 import PageContainer, { PageHeader } from '@/components/PageContainer';
 import BottomNav from '@/components/BottomNav';
 import { quizQuestions, type ImmunityResult, type QuizQuestion } from '@/lib/mock-data';
 
 type LabPhase = 'intro' | 'quiz' | 'result';
+
+const categoryIcons: { label: string; icon: LucideIcon; color: string }[] = [
+  { label: 'AI换脸', icon: ScanFace, color: 'text-pink-400' },
+  { label: 'AI拟声', icon: Mic, color: 'text-purple-400' },
+  { label: 'AI新闻', icon: Newspaper, color: 'text-blue-400' },
+  { label: '情绪操控', icon: Brain, color: 'text-amber-400' },
+];
 
 export default function LabPage() {
   const [phase, setPhase] = useState<LabPhase>('intro');
@@ -38,7 +59,6 @@ export default function LabPage() {
       setSelectedAnswer(null);
       setShowExplanation(false);
     } else {
-      // 计算结果
       const finalScore = Math.round(((score + (selectedAnswer === shuffledQuestions[currentIndex].isFake ? 1 : 0)) / shuffledQuestions.length) * 100);
       const riskTypes = answers.reduce<Record<string, number>>((acc, a) => {
         if (!a.correct) acc[a.question.riskType] = (acc[a.question.riskType] || 0) + 1;
@@ -102,9 +122,11 @@ export default function LabPage() {
               <motion.div
                 animate={{ rotateY: [0, 360] }}
                 transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
-                className="text-5xl mb-4 inline-block"
+                className="inline-block mb-4"
               >
-                🧪
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-accent to-cyan flex items-center justify-center shadow-lg shadow-accent/20">
+                  <FlaskConical size={32} className="text-white" strokeWidth={1.5} />
+                </div>
               </motion.div>
               <h2 className="text-xl font-bold gradient-text mb-2">你能识破AI骗局吗？</h2>
               <p className="text-xs text-muted leading-relaxed mb-4">
@@ -127,18 +149,21 @@ export default function LabPage() {
 
             {/* Category Preview */}
             <div className="grid grid-cols-2 gap-2">
-              {['AI换脸', 'AI拟声', 'AI新闻', '情绪操控'].map((cat, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.1 }}
-                  className="glass-card-sm p-3 text-center"
-                >
-                  <div className="text-2xl mb-1">{['🎭', '🎙️', '📰', '🧠'][i]}</div>
-                  <div className="text-xs text-muted">{cat}</div>
-                </motion.div>
-              ))}
+              {categoryIcons.map((cat, i) => {
+                const CatIcon = cat.icon;
+                return (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.1 }}
+                    className="glass-card-sm p-3 text-center"
+                  >
+                    <CatIcon size={24} className={`mx-auto mb-1 ${cat.color}`} strokeWidth={1.5} />
+                    <div className="text-xs text-muted">{cat.label}</div>
+                  </motion.div>
+                );
+              })}
             </div>
 
             {/* Start Button */}
@@ -146,9 +171,10 @@ export default function LabPage() {
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
               onClick={() => setPhase('quiz')}
-              className="w-full py-4 rounded-2xl bg-gradient-to-r from-accent to-cyan text-white font-semibold text-sm shadow-lg shadow-accent/20"
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-accent to-cyan text-white font-semibold text-sm shadow-lg shadow-accent/20 inline-flex items-center justify-center gap-2"
             >
               开始挑战
+              <ChevronRight size={16} strokeWidth={1.5} />
             </motion.button>
           </motion.div>
         )}
@@ -265,9 +291,10 @@ export default function LabPage() {
                   </p>
                   <button
                     onClick={nextQuestion}
-                    className="w-full py-2.5 rounded-xl bg-accent/10 text-accent text-sm font-medium border border-accent/20"
+                    className="w-full py-2.5 rounded-xl bg-accent/10 text-accent text-sm font-medium border border-accent/20 inline-flex items-center justify-center gap-1"
                   >
-                    {currentIndex < shuffledQuestions.length - 1 ? '下一题 →' : '查看结果 →'}
+                    {currentIndex < shuffledQuestions.length - 1 ? '下一题' : '查看结果'}
+                    <ChevronRight size={14} strokeWidth={1.5} />
                   </button>
                 </motion.div>
               )}
@@ -313,7 +340,10 @@ export default function LabPage() {
 
             {/* Risk Profile */}
             <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3">🎯 风险认知画像</h3>
+              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                <Target size={14} className="text-accent" strokeWidth={1.5} />
+                风险认知画像
+              </h3>
               <div className="space-y-3">
                 {immunityResult.riskProfile.map((item, i) => (
                   <motion.div
@@ -350,7 +380,10 @@ export default function LabPage() {
 
             {/* Weaknesses */}
             <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3">⚠️ 你容易受到的攻击类型</h3>
+              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                <AlertTriangle size={14} className="text-warning" strokeWidth={1.5} />
+                你容易受到的攻击类型
+              </h3>
               <div className="flex flex-wrap gap-2">
                 {immunityResult.weaknesses.map((w, i) => (
                   <motion.span
@@ -368,7 +401,10 @@ export default function LabPage() {
 
             {/* Recommendations */}
             <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3">💡 提升建议</h3>
+              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                <Lightbulb size={14} className="text-warning" strokeWidth={1.5} />
+                提升建议
+              </h3>
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
                   <span className="text-accent text-xs">▸</span>
@@ -401,11 +437,13 @@ export default function LabPage() {
                   setShowExplanation(false);
                   setImmunityResult(null);
                 }}
-                className="flex-1 py-3 rounded-xl glass-card text-accent text-sm font-medium"
+                className="flex-1 py-3 rounded-xl glass-card text-accent text-sm font-medium inline-flex items-center justify-center gap-1.5"
               >
+                <RotateCcw size={14} strokeWidth={1.5} />
                 重新测试
               </button>
-              <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium">
+              <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium inline-flex items-center justify-center gap-1.5">
+                <Share2 size={14} strokeWidth={1.5} />
                 分享结果
               </button>
             </div>

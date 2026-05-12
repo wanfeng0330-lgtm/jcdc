@@ -2,6 +2,28 @@
 
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Image as ImageIcon,
+  Video,
+  Mic,
+  FileText,
+  Smartphone,
+  Search,
+  Brain,
+  Drama,
+  Eye,
+  BarChart2,
+  RefreshCw,
+  AlertTriangle,
+  Radio,
+  ScanFace,
+  Network,
+  CheckCircle2,
+  ShieldAlert,
+  Upload,
+  ArrowLeft,
+  type LucideIcon,
+} from 'lucide-react';
 import PageContainer, { PageHeader } from '@/components/PageContainer';
 import BottomNav from '@/components/BottomNav';
 import { RiskGauge, RadarChart, RiskHeatMap } from '@/components/Charts';
@@ -12,23 +34,23 @@ import type { AnalysisResult } from '@/lib/mock-data';
 type FileType = 'image' | 'video' | 'audio' | 'text' | 'screenshot';
 type AnalysisPhase = 'idle' | 'uploading' | 'analyzing' | 'result';
 
-const fileTypes: { type: FileType; icon: string; label: string }[] = [
-  { type: 'image', icon: '🖼️', label: '图片' },
-  { type: 'video', icon: '🎬', label: '视频' },
-  { type: 'audio', icon: '🎙️', label: '音频' },
-  { type: 'text', icon: '📝', label: '文本' },
-  { type: 'screenshot', icon: '📱', label: '截图' },
+const fileTypes: { type: FileType; icon: LucideIcon; label: string }[] = [
+  { type: 'image', icon: ImageIcon, label: '图片' },
+  { type: 'video', icon: Video, label: '视频' },
+  { type: 'audio', icon: Mic, label: '音频' },
+  { type: 'text', icon: FileText, label: '文本' },
+  { type: 'screenshot', icon: Smartphone, label: '截图' },
 ];
 
 type StepStatus = 'pending' | 'active' | 'done';
 
-const analysisSteps: { label: string; icon: string; status: StepStatus }[] = [
-  { label: 'OCR识别与文本提取', icon: '🔍', status: 'pending' },
-  { label: 'AI风险特征分析', icon: '🧠', status: 'pending' },
-  { label: '情绪传播模式识别', icon: '🎭', status: 'pending' },
-  { label: '深度伪造特征检测', icon: '👁️', status: 'pending' },
-  { label: '内容可信度建模', icon: '📊', status: 'pending' },
-  { label: '传播学风险评估', icon: '🔄', status: 'pending' },
+const analysisSteps: { label: string; icon: LucideIcon; status: StepStatus }[] = [
+  { label: 'OCR识别与文本提取', icon: Search, status: 'pending' },
+  { label: 'AI风险特征分析', icon: Brain, status: 'pending' },
+  { label: '情绪传播模式识别', icon: Drama, status: 'pending' },
+  { label: '深度伪造特征检测', icon: Eye, status: 'pending' },
+  { label: '内容可信度建模', icon: BarChart2, status: 'pending' },
+  { label: '传播学风险评估', icon: RefreshCw, status: 'pending' },
 ];
 
 export default function AnalyzePage() {
@@ -44,7 +66,6 @@ export default function AnalyzePage() {
     const steps = [...analysisSteps];
     setCurrentSteps(steps.map((s) => ({ ...s, status: 'pending' as StepStatus })));
 
-    // 模拟逐步分析
     let stepIndex = 0;
     const interval = setInterval(() => {
       if (stepIndex < steps.length) {
@@ -73,6 +94,15 @@ export default function AnalyzePage() {
     setCurrentSteps(analysisSteps);
   }, []);
 
+  const riskFactorIcons: Record<string, LucideIcon> = {
+    emotion: AlertTriangle,
+    identity: ShieldAlert,
+    title: FileText,
+    voice: Mic,
+    deepfake: ScanFace,
+    spread: Network,
+  };
+
   return (
     <PageContainer>
       <PageHeader
@@ -94,20 +124,23 @@ export default function AnalyzePage() {
             <div className="glass-card-sm p-4">
               <p className="text-xs text-muted mb-3">选择内容类型</p>
               <div className="flex gap-2">
-                {fileTypes.map((ft) => (
-                  <button
-                    key={ft.type}
-                    onClick={() => setSelectedType(ft.type)}
-                    className={`flex-1 py-3 px-2 rounded-xl text-center transition-all ${
-                      selectedType === ft.type
-                        ? 'bg-accent/15 border border-accent/30 text-accent'
-                        : 'bg-white/[0.03] border border-white/5 text-muted hover:bg-white/[0.06]'
-                    }`}
-                  >
-                    <div className="text-xl mb-1">{ft.icon}</div>
-                    <div className="text-[10px]">{ft.label}</div>
-                  </button>
-                ))}
+                {fileTypes.map((ft) => {
+                  const IconComp = ft.icon;
+                  return (
+                    <button
+                      key={ft.type}
+                      onClick={() => setSelectedType(ft.type)}
+                      className={`flex-1 py-3 px-2 rounded-xl text-center transition-all ${
+                        selectedType === ft.type
+                          ? 'bg-accent/15 border border-accent/30 text-accent'
+                          : 'bg-white/[0.03] border border-white/5 text-muted hover:bg-white/[0.06]'
+                      }`}
+                    >
+                      <IconComp size={20} className="mx-auto mb-1" strokeWidth={1.5} />
+                      <div className="text-[10px]">{ft.label}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -122,9 +155,12 @@ export default function AnalyzePage() {
                 <motion.div
                   animate={{ y: [0, -8, 0] }}
                   transition={{ duration: 2, repeat: Infinity }}
-                  className="text-4xl mb-3"
+                  className="mb-3"
                 >
-                  {fileTypes.find((f) => f.type === selectedType)?.icon}
+                  {(() => {
+                    const IconComp = fileTypes.find((f) => f.type === selectedType)?.icon || ImageIcon;
+                    return <IconComp size={36} className="mx-auto text-accent" strokeWidth={1.5} />;
+                  })()}
                 </motion.div>
                 <p className="text-sm text-foreground/70 mb-1">
                   点击上传或拖拽文件
@@ -157,9 +193,10 @@ export default function AnalyzePage() {
             {/* Quick Demo */}
             <button
               onClick={startAnalysis}
-              className="w-full py-3 rounded-xl glass-card text-accent text-sm font-medium"
+              className="w-full py-3 rounded-xl glass-card text-accent text-sm font-medium inline-flex items-center justify-center gap-2"
             >
-              体验演示分析 →
+              <Upload size={14} strokeWidth={1.5} />
+              体验演示分析
             </button>
           </motion.div>
         )}
@@ -179,7 +216,42 @@ export default function AnalyzePage() {
                 <span className="text-xs text-accent animate-pulse">进行中...</span>
               </div>
               <AIFlowLine className="mb-4" />
-              <AnalysisSteps steps={currentSteps} />
+              <div className="space-y-3">
+                {currentSteps.map((step, i) => {
+                  const IconComp = step.icon;
+                  return (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: step.status === 'pending' ? 0.4 : 1, x: 0 }}
+                      transition={{ delay: i * 0.15 }}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-xl transition-colors ${
+                        step.status === 'active'
+                          ? 'bg-accent/10 border border-accent/20'
+                          : step.status === 'done'
+                          ? 'bg-success/5 border border-success/10'
+                          : 'bg-white/[0.02] border border-white/5'
+                      }`}
+                    >
+                      <IconComp size={16} className={step.status === 'active' ? 'text-accent' : step.status === 'done' ? 'text-success' : 'text-muted'} strokeWidth={1.5} />
+                      <span className={`text-sm flex-1 ${
+                        step.status === 'active' ? 'text-accent font-medium' : step.status === 'done' ? 'text-success' : 'text-muted'
+                      }`}>
+                        {step.label}
+                      </span>
+                      {step.status === 'active' && (
+                        <div className="flex gap-1">
+                          <span className="thinking-dot w-1.5 h-1.5 rounded-full bg-accent" />
+                          <span className="thinking-dot w-1.5 h-1.5 rounded-full bg-accent" />
+                          <span className="thinking-dot w-1.5 h-1.5 rounded-full bg-accent" />
+                        </div>
+                      )}
+                      {step.status === 'done' && <CheckCircle2 size={14} className="text-success" strokeWidth={1.5} />}
+                      {step.status === 'pending' && <span className="text-muted text-xs">等待中</span>}
+                    </motion.div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Live Data Stream */}
@@ -286,35 +358,41 @@ export default function AnalyzePage() {
                   exit={{ opacity: 0, x: 10 }}
                   className="space-y-3"
                 >
-                  {result.riskFactors.map((factor, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.1 }}
-                      className="glass-card-sm p-4"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2">
-                          <span>{factor.icon}</span>
-                          <span className="text-sm font-medium">{factor.label}</span>
+                  {result.riskFactors.map((factor, i) => {
+                    const RiskIcon = riskFactorIcons[factor.type] || AlertTriangle;
+                    return (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        className="glass-card-sm p-4"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2">
+                            <RiskIcon size={16} className={factor.score >= 70 ? 'text-danger' : factor.score >= 40 ? 'text-warning' : 'text-success'} strokeWidth={1.5} />
+                            <span className="text-sm font-medium">{factor.label}</span>
+                          </div>
+                          <span className={`text-xs font-bold ${
+                            factor.score >= 70 ? 'text-danger' : factor.score >= 40 ? 'text-warning' : 'text-success'
+                          }`}>
+                            {factor.score}%
+                          </span>
                         </div>
-                        <span className={`text-xs font-bold ${
-                          factor.score >= 70 ? 'text-danger' : factor.score >= 40 ? 'text-warning' : 'text-success'
-                        }`}>
-                          {factor.score}%
-                        </span>
-                      </div>
-                      <p className="text-xs text-muted leading-relaxed">{factor.description}</p>
-                    </motion.div>
-                  ))}
+                        <p className="text-xs text-muted leading-relaxed">{factor.description}</p>
+                      </motion.div>
+                    );
+                  })}
                 </motion.div>
               )}
             </AnimatePresence>
 
             {/* Emotion Analysis */}
             <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3">🎭 情绪传播分析</h3>
+              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                <Drama size={14} className="text-accent" strokeWidth={1.5} />
+                情绪传播分析
+              </h3>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-muted">主要情绪</span>
@@ -343,7 +421,10 @@ export default function AnalyzePage() {
 
             {/* Spread Analysis */}
             <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3">🔄 传播路径分析</h3>
+              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                <Network size={14} className="text-accent" strokeWidth={1.5} />
+                传播路径分析
+              </h3>
               <div className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-xs text-muted">传播速度</span>
@@ -366,7 +447,10 @@ export default function AnalyzePage() {
 
             {/* Verification Suggestions */}
             <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3">✅ 验证建议</h3>
+              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                <CheckCircle2 size={14} className="text-success" strokeWidth={1.5} />
+                验证建议
+              </h3>
               <div className="space-y-2">
                 {result.verificationSuggestions.map((s, i) => (
                   <motion.div
@@ -386,8 +470,9 @@ export default function AnalyzePage() {
             {/* Reset Button */}
             <button
               onClick={reset}
-              className="w-full py-3 rounded-xl glass-card text-accent text-sm font-medium"
+              className="w-full py-3 rounded-xl glass-card text-accent text-sm font-medium inline-flex items-center justify-center gap-2"
             >
+              <ArrowLeft size={14} strokeWidth={1.5} />
               重新检测
             </button>
           </motion.div>

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Send, Shield } from 'lucide-react';
 import PageContainer, { PageHeader } from '@/components/PageContainer';
 import BottomNav from '@/components/BottomNav';
 import { agentResponses } from '@/lib/mock-data';
@@ -89,7 +90,6 @@ export default function AgentPage() {
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInput('');
 
-    // 模拟AI回复
     setTimeout(() => {
       const response = agentResponses.default;
       simulateStreaming(response, assistantId);
@@ -97,7 +97,6 @@ export default function AgentPage() {
   };
 
   const renderContent = (content: string) => {
-    // 简单的Markdown渲染
     return content.split('\n').map((line, i) => {
       if (line.startsWith('**') && line.endsWith('**')) {
         return (
@@ -173,8 +172,8 @@ export default function AgentPage() {
               className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
             >
               {msg.role === 'assistant' && (
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent to-cyan flex items-center justify-center text-sm shrink-0 mr-2 mt-1">
-                  ◈
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent to-cyan flex items-center justify-center shrink-0 mr-2 mt-1">
+                  <Shield size={14} className="text-white" strokeWidth={1.5} />
                 </div>
               )}
               <div
@@ -262,7 +261,7 @@ export default function AgentPage() {
             disabled={!input.trim() || isStreaming}
             className="w-8 h-8 rounded-xl bg-accent flex items-center justify-center text-white disabled:opacity-30 transition-opacity shrink-0"
           >
-            ↑
+            <Send size={14} strokeWidth={1.5} />
           </motion.button>
         </div>
       </div>

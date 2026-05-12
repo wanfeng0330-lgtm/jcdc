@@ -3,34 +3,42 @@
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useRef } from 'react';
 import Link from 'next/link';
+import {
+  ShieldCheck,
+  FlaskConical,
+  Bot,
+  BarChart3,
+  Shield,
+  Sparkles,
+} from 'lucide-react';
 import ParticleBackground from '@/components/ParticleBackground';
 import BottomNav from '@/components/BottomNav';
 import { DataStream } from '@/components/AIAnimations';
 
 const features = [
   {
-    icon: '🛡️',
+    icon: ShieldCheck,
     title: 'AI内容可信度分析',
     desc: '多维度检测AI生成内容，识别深度伪造、AI拟声、情绪操控等风险',
     href: '/analyze',
     gradient: 'from-indigo-500 to-purple-500',
   },
   {
-    icon: '🧪',
+    icon: FlaskConical,
     title: 'AI媒介素养实验室',
     desc: '互动式体验，测试你的AI骗局识别能力，构建认知防线',
     href: '/lab',
     gradient: 'from-cyan-500 to-blue-500',
   },
   {
-    icon: '🤖',
+    icon: Bot,
     title: 'AI风险解释Agent',
     desc: '对话式AI助手，从传播学视角解释信息风险与认知偏差',
     href: '/agent',
     gradient: 'from-amber-500 to-orange-500',
   },
   {
-    icon: '📊',
+    icon: BarChart3,
     title: '数据可视化中心',
     desc: '实时监控AI风险态势，洞察虚假信息传播规律',
     href: '/dashboard',
@@ -73,7 +81,7 @@ export default function HomePage() {
             transition={{ type: 'spring', stiffness: 200, delay: 0.2 }}
             className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br from-accent to-cyan mb-6 shadow-lg shadow-accent/20"
           >
-            <span className="text-4xl">◈</span>
+            <Shield size={36} className="text-white" strokeWidth={1.5} />
           </motion.div>
 
           {/* Title */}
@@ -102,8 +110,9 @@ export default function HomePage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="text-xs text-accent font-medium mb-8"
+            className="text-xs text-accent font-medium mb-8 inline-flex items-center gap-1.5"
           >
+            <Sparkles size={14} strokeWidth={1.5} />
             用AI对抗AI生成的虚假信息
           </motion.p>
 
@@ -190,30 +199,33 @@ export default function HomePage() {
       >
         <h2 className="text-lg font-bold mb-4 gradient-text">核心功能</h2>
         <div className="space-y-3">
-          {features.map((feature, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, x: -20 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <Link href={feature.href}>
-                <div className="glass-card-sm p-4 flex items-start gap-4 group">
-                  <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center text-2xl shrink-0 shadow-lg`}>
-                    {feature.icon}
+          {features.map((feature, i) => {
+            const IconComp = feature.icon;
+            return (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <Link href={feature.href}>
+                  <div className="glass-card-sm p-4 flex items-start gap-4 group">
+                    <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${feature.gradient} flex items-center justify-center shrink-0 shadow-lg`}>
+                      <IconComp size={22} className="text-white" strokeWidth={1.5} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-semibold text-sm mb-1 group-hover:text-accent transition-colors">
+                        {feature.title}
+                      </h3>
+                      <p className="text-xs text-muted leading-relaxed">{feature.desc}</p>
+                    </div>
+                    <span className="text-muted group-hover:text-accent transition-colors mt-1">→</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-sm mb-1 group-hover:text-accent transition-colors">
-                      {feature.title}
-                    </h3>
-                    <p className="text-xs text-muted leading-relaxed">{feature.desc}</p>
-                  </div>
-                  <span className="text-muted group-hover:text-accent transition-colors mt-1">→</span>
-                </div>
-              </Link>
-            </motion.div>
-          ))}
+                </Link>
+              </motion.div>
+            );
+          })}
         </div>
       </motion.div>
 

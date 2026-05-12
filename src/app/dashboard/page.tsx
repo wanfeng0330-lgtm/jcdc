@@ -13,11 +13,27 @@ import {
   Pie,
   Cell,
 } from 'recharts';
+import {
+  TrendingUp,
+  Target,
+  Siren,
+  Clock,
+  Zap,
+  Activity,
+} from 'lucide-react';
 import PageContainer, { PageHeader, Section } from '@/components/PageContainer';
 import BottomNav from '@/components/BottomNav';
 import { dashboardData } from '@/lib/mock-data';
 
 const COLORS = ['#6366f1', '#06b6d4', '#818cf8', '#f59e0b', '#ef4444'];
+
+const sectionIcons = {
+  weeklyTrend: TrendingUp,
+  riskType: Target,
+  highFreqScam: Siren,
+  hourly: Clock,
+  realtime: Zap,
+};
 
 export default function DashboardPage() {
   return (
@@ -57,7 +73,10 @@ export default function DashboardPage() {
       {/* Weekly Trend */}
       <Section delay={0.2} className="mb-4">
         <div className="glass-card-sm p-4">
-          <h3 className="text-sm font-semibold mb-3">📈 本周趋势</h3>
+          <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+            <TrendingUp size={14} className="text-accent" strokeWidth={1.5} />
+            本周趋势
+          </h3>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={dashboardData.weeklyTrend}>
@@ -107,7 +126,10 @@ export default function DashboardPage() {
       {/* Risk Type Distribution */}
       <Section delay={0.3} className="mb-4">
         <div className="glass-card-sm p-4">
-          <h3 className="text-sm font-semibold mb-3">🎯 风险类型分布</h3>
+          <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+            <Target size={14} className="text-accent" strokeWidth={1.5} />
+            风险类型分布
+          </h3>
           <div className="flex items-center gap-4">
             <div className="w-32 h-32 shrink-0">
               <ResponsiveContainer width="100%" height="100%">
@@ -147,7 +169,10 @@ export default function DashboardPage() {
       {/* High Freq Scams */}
       <Section delay={0.4} className="mb-4">
         <div className="glass-card-sm p-4">
-          <h3 className="text-sm font-semibold mb-3">🚨 高频诈骗类型</h3>
+          <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+            <Siren size={14} className="text-danger" strokeWidth={1.5} />
+            高频诈骗类型
+          </h3>
           <div className="space-y-3">
             {dashboardData.highFreqScams.map((scam, i) => (
               <motion.div
@@ -186,7 +211,10 @@ export default function DashboardPage() {
       {/* Hourly Distribution */}
       <Section delay={0.5} className="mb-4">
         <div className="glass-card-sm p-4">
-          <h3 className="text-sm font-semibold mb-3">⏰ 24小时检测分布</h3>
+          <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+            <Clock size={14} className="text-cyan" strokeWidth={1.5} />
+            24小时检测分布
+          </h3>
           <div className="h-36">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={dashboardData.hourlyChecks}>
@@ -221,9 +249,12 @@ export default function DashboardPage() {
       <Section delay={0.6} className="mb-24">
         <div className="glass-card-sm p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold">⚡ 实时监控</h3>
+            <h3 className="text-sm font-semibold inline-flex items-center gap-2">
+              <Zap size={14} className="text-accent" strokeWidth={1.5} />
+              实时监控
+            </h3>
             <div className="flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+              <Activity size={8} className="text-success" strokeWidth={2} />
               <span className="text-[10px] text-success">运行中</span>
             </div>
           </div>

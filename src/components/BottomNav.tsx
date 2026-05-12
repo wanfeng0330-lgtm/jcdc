@@ -4,32 +4,30 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
+import { Home, ScanSearch, FlaskConical, MessageSquare, BarChart3 } from 'lucide-react';
 
 const navItems = [
-  { href: '/', label: '首页', icon: '◈' },
-  { href: '/analyze', label: '检测', icon: '◎' },
-  { href: '/lab', label: '实验室', icon: '◇' },
-  { href: '/agent', label: 'Agent', icon: '✦' },
-  { href: '/dashboard', label: '数据', icon: '▣' },
+  { href: '/', label: '首页', icon: Home },
+  { href: '/analyze', label: '检测', icon: ScanSearch },
+  { href: '/lab', label: '实验室', icon: FlaskConical },
+  { href: '/agent', label: 'Agent', icon: MessageSquare },
+  { href: '/dashboard', label: '数据', icon: BarChart3 },
 ];
 
 export default function BottomNav() {
   const pathname = usePathname();
-  const [activeIndex, setActiveIndex] = useState(
-    navItems.findIndex((item) => item.href === pathname) || 0
-  );
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 safe-bottom">
       <div className="mx-3 mb-3 glass-card !rounded-2xl px-2 py-1">
         <div className="flex items-center justify-around">
-          {navItems.map((item, index) => {
+          {navItems.map((item) => {
             const isActive = pathname === item.href;
+            const IconComp = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                onClick={() => setActiveIndex(index)}
                 className="relative flex flex-col items-center py-2 px-3 min-w-[56px]"
               >
                 <AnimatePresence>
@@ -44,13 +42,13 @@ export default function BottomNav() {
                     />
                   )}
                 </AnimatePresence>
-                <span
-                  className={`text-xl mb-0.5 transition-colors duration-200 ${
+                <IconComp
+                  size={20}
+                  className={`mb-0.5 transition-colors duration-200 ${
                     isActive ? 'text-accent' : 'text-muted'
                   }`}
-                >
-                  {item.icon}
-                </span>
+                  strokeWidth={isActive ? 2 : 1.5}
+                />
                 <span
                   className={`text-[10px] font-medium transition-colors duration-200 ${
                     isActive ? 'text-accent' : 'text-muted'
