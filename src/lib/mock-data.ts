@@ -15,7 +15,7 @@ export interface RiskFactor {
   label: string;
   score: number;
   description: string;
-  icon: string;
+  icon?: string;
 }
 
 export interface EmotionAnalysis {

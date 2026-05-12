@@ -23,6 +23,7 @@ import {
   ArrowLeft,
   X,
   File,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import PageContainer, { PageHeader } from '@/components/PageContainer';
@@ -34,6 +35,7 @@ import type { AnalysisResult } from '@/lib/mock-data';
 
 type FileType = 'image' | 'video' | 'audio' | 'text' | 'screenshot';
 type AnalysisPhase = 'idle' | 'uploading' | 'analyzing' | 'result';
+type TabType = 'score' | 'radar' | 'detail';
 
 const fileTypes: { type: FileType; icon: LucideIcon; label: string; accept: string }[] = [
   { type: 'image', icon: ImageIcon, label: '图片', accept: 'image/*' },
@@ -43,10 +45,16 @@ const fileTypes: { type: FileType; icon: LucideIcon; label: string; accept: stri
   { type: 'screenshot', icon: Smartphone, label: '截图', accept: 'image/*' },
 ];
 
+const tabs: { key: TabType; label: string }[] = [
+  { key: 'score', label: '风险热力' },
+  { key: 'radar', label: '雷达图' },
+  { key: 'detail', label: '详细分析' },
+];
+
 type StepStatus = 'pending' | 'active' | 'done';
 
 const initialSteps: { label: string; icon: LucideIcon; status: StepStatus }[] = [
-  { label: 'OCR识别与文本提取', icon: Search, status: 'pending' },
+  { label: '内容识别与特征提取', icon: Search, status: 'pending' },
   { label: 'AI风险特征分析', icon: Brain, status: 'pending' },
   { label: '情绪传播模式识别', icon: Drama, status: 'pending' },
   { label: '深度伪造特征检测', icon: Eye, status: 'pending' },
@@ -54,37 +62,35 @@ const initialSteps: { label: string; icon: LucideIcon; status: StepStatus }[] = 
   { label: '传播学风险评估', icon: RefreshCw, status: 'pending' },
 ];
 
-// 预设演示内容
-const demoContents: Record<FileType, string> = {
-  image: '一张在微信群传播的截图：某"官方机构"发布紧急通知，要求所有市民在48小时内完成身份认证，否则将冻结账户。截图带有伪造的公章和红色紧急标签。',
-  video: '一段在短视频平台流传的视频：某知名企业家在视频中宣布公司即将倒闭，呼吁投资者尽快撤资。视频画面清晰但面部边缘偶有闪烁。',
-  audio: '一条语音消息："妈，我出事了，赶紧给我转5万块！我现在不方便说话，你赶紧转到这个账号6228xxxx。"语音声音与本人相似但语气急促不自然。',
-  screenshot: '一条短信截图：来自"95588"的银行短信，称"您的账户存在异常，请立即点击 http://xxx.bank-verify.com 进行验证，否则账户将被冻结"。',
-  text: '震惊！某市财政局紧急通知：所有退休人员必须在3天内完成社保认证，否则停发养老金！这是刚刚从内部渠道拿到的消息，请大家互相转告，不要耽误了！转发让更多人知道！',
-};
-
 export default function AnalyzePage() {
   const [phase, setPhase] = useState<AnalysisPhase>('idle');
   const [selectedType, setSelectedType] = useState<FileType>('image');
   const [inputText, setInputText] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileBase64, setFileBase64] = useState<string>('');
+  const [fileMimeType, setFileMimeType] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false);
   const [currentSteps, setCurrentSteps] = useState(initialSteps);
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [activeTab, setActiveTab] = useState<'score' | 'radar' | 'detail'>('score');
+  const [activeTab, setActiveTab] = useState<TabType>('score');
   const [analysisSource, setAnalysisSource] = useState<string>('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 是否有内容可以分析
-  const hasContent = selectedType === 'text' ? inputText.trim().length > 0 : selectedFile !== null;
-
   const handleFileSelect = useCallback((file: File) => {
     setSelectedFile(file);
-    setPhase('uploading');
-    // 模拟上传过程
-    setTimeout(() => {
+    setFileMimeType(file.type);
+
+    // Read file as base64
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      // result is like "data:image/jpeg;base64,/9j/4AAQ..."
+      setFileBase64(result);
       setPhase('idle');
-    }, 800);
+    };
+    reader.readAsDataURL(file);
+
+    setPhase('uploading');
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -101,6 +107,8 @@ export default function AnalyzePage() {
 
   const clearFile = useCallback(() => {
     setSelectedFile(null);
+    setFileBase64('');
+    setFileMimeType('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
@@ -125,22 +133,30 @@ export default function AnalyzePage() {
     }, 800);
   }, []);
 
-  const startAnalysis = useCallback(async (content: string) => {
-    if (!content.trim()) return;
+  const startAnalysis = useCallback(async (content: string, base64?: string, mimeType?: string) => {
+    if (!content.trim() && !base64) return;
 
     setPhase('analyzing');
     setAnalysisSource('');
 
     advanceSteps(async () => {
       try {
+        const payload: Record<string, string> = {
+          type: selectedType,
+          content,
+          text: content,
+        };
+
+        // For image types, send the base64 data so AI can actually see the image
+        if (base64) {
+          payload.imageBase64 = base64;
+          payload.mimeType = mimeType || 'image/jpeg';
+        }
+
         const response = await fetch('/api/analyze', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: selectedType,
-            content,
-            text: content,
-          }),
+          body: JSON.stringify(payload),
         });
 
         const data = await response.json();
@@ -164,16 +180,26 @@ export default function AnalyzePage() {
     });
   }, [selectedType, advanceSteps]);
 
-  const startDemoAnalysis = useCallback(() => {
-    const demoContent = demoContents[selectedType];
-    startAnalysis(demoContent);
-  }, [selectedType, startAnalysis]);
+  const startFileAnalysis = useCallback(() => {
+    if (!selectedFile && !fileBase64) return;
+    // For non-text types, send the base64 image + a brief description
+    const typeLabel = fileTypes.find((f) => f.type === selectedType)?.label || '文件';
+    const desc = `[用户上传的${typeLabel}] ${selectedFile?.name || '文件'}`;
+    startAnalysis(desc, fileBase64, fileMimeType);
+  }, [selectedFile, fileBase64, fileMimeType, selectedType, startAnalysis]);
+
+  const startTextAnalysis = useCallback(() => {
+    if (!inputText.trim()) return;
+    startAnalysis(inputText);
+  }, [inputText, startAnalysis]);
 
   const reset = useCallback(() => {
     setPhase('idle');
     setResult(null);
     setInputText('');
     setSelectedFile(null);
+    setFileBase64('');
+    setFileMimeType('');
     setCurrentSteps(initialSteps);
     setAnalysisSource('');
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -191,11 +217,14 @@ export default function AnalyzePage() {
   // 获取当前类型的accept属性
   const currentAccept = fileTypes.find((f) => f.type === selectedType)?.accept || '';
 
+  // Determine if content is normal/safe
+  const isLowRisk = result && result.riskLevel === 'low' && result.riskFactors.length === 0;
+
   return (
     <PageContainer>
       <PageHeader
         title="AI内容可信度分析"
-        subtitle="多维度检测AI生成内容，识别信息风险"
+        subtitle="先检测内容，再实事求是地分析风险"
         icon="◎"
       />
 
@@ -228,8 +257,7 @@ export default function AnalyzePage() {
                       key={ft.type}
                       onClick={() => {
                         setSelectedType(ft.type);
-                        setSelectedFile(null);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
+                        clearFile();
                       }}
                       className={`flex-1 py-3 px-2 rounded-xl text-center transition-all ${
                         selectedType === ft.type
@@ -256,16 +284,24 @@ export default function AnalyzePage() {
                     className="glass-card-sm p-4"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
-                        {(() => {
-                          const TypeIcon = fileTypes.find((f) => f.type === selectedType)?.icon || File;
-                          return <TypeIcon size={20} className="text-accent" strokeWidth={1.5} />;
-                        })()}
+                      <div className="w-12 h-12 rounded-xl bg-accent/10 flex items-center justify-center shrink-0 overflow-hidden">
+                        {selectedType === 'image' || selectedType === 'screenshot' ? (
+                          <img
+                            src={fileBase64}
+                            alt="preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          (() => {
+                            const TypeIcon = fileTypes.find((f) => f.type === selectedType)?.icon || File;
+                            return <TypeIcon size={20} className="text-accent" strokeWidth={1.5} />;
+                          })()
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-foreground truncate">{selectedFile.name}</p>
                         <p className="text-[10px] text-muted">
-                          {(selectedFile.size / 1024).toFixed(1)} KB
+                          {(selectedFile.size / 1024).toFixed(1)} KB · AI将直接检测此文件内容
                         </p>
                       </div>
                       <button onClick={clearFile} className="p-1.5 rounded-lg hover:bg-white/5 text-muted">
@@ -273,16 +309,16 @@ export default function AnalyzePage() {
                       </button>
                     </div>
                     <button
-                      onClick={() => {
-                        // 将文件名作为内容描述发给AI
-                        const fileDesc = `[${fileTypes.find(f => f.type === selectedType)?.label}文件] ${selectedFile.name}`;
-                        startAnalysis(fileDesc);
-                      }}
-                      className="w-full mt-3 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium inline-flex items-center justify-center gap-2"
+                      onClick={startFileAnalysis}
+                      disabled={!fileBase64}
+                      className="w-full mt-3 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                     >
                       <Search size={14} strokeWidth={1.5} />
                       开始AI分析
                     </button>
+                    <p className="text-[10px] text-muted/50 mt-2 text-center">
+                      AI将直接查看并分析文件内容，实事求是地返回结果
+                    </p>
                   </motion.div>
                 ) : (
                   /* Upload dropzone */
@@ -314,7 +350,7 @@ export default function AnalyzePage() {
                         {isDragging ? '松开即可上传' : '点击选择或拖拽文件'}
                       </p>
                       <p className="text-xs text-muted">
-                        支持 {fileTypes.find((f) => f.type === selectedType)?.label} 格式
+                        支持 {fileTypes.find((f) => f.type === selectedType)?.label} 格式 · AI将直接检测文件内容
                       </p>
                     </div>
                   </motion.div>
@@ -332,7 +368,7 @@ export default function AnalyzePage() {
                   className="w-full h-32 bg-transparent text-sm text-foreground/80 placeholder-muted/50 resize-none outline-none"
                 />
                 <button
-                  onClick={() => startAnalysis(inputText)}
+                  onClick={startTextAnalysis}
                   disabled={!inputText.trim()}
                   className="w-full mt-2 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
                 >
@@ -340,21 +376,6 @@ export default function AnalyzePage() {
                 </button>
               </div>
             )}
-
-            {/* Demo Analysis */}
-            <div className="glass-card-sm p-4">
-              <p className="text-xs text-muted mb-3">没有内容？试试 AI 演示分析</p>
-              <button
-                onClick={startDemoAnalysis}
-                className="w-full py-3 rounded-xl bg-white/[0.03] border border-accent/15 text-accent text-sm font-medium inline-flex items-center justify-center gap-2 hover:bg-accent/5 transition-colors"
-              >
-                <Upload size={14} strokeWidth={1.5} />
-                使用示例内容体验分析
-              </button>
-              <p className="text-[10px] text-muted/50 mt-2 text-center">
-                将使用预设的{fileTypes.find(f => f.type === selectedType)?.label}示例场景进行AI检测演示
-              </p>
-            </div>
           </motion.div>
         )}
 
@@ -373,7 +394,7 @@ export default function AnalyzePage() {
             >
               <Upload size={24} className="text-accent" strokeWidth={1.5} />
             </motion.div>
-            <p className="text-sm text-foreground/70">文件上传中...</p>
+            <p className="text-sm text-foreground/70">文件读取中...</p>
           </motion.div>
         )}
 
@@ -389,7 +410,7 @@ export default function AnalyzePage() {
             <div className="glass-card-sm p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold">AI分析进程</h3>
-                <span className="text-xs text-accent animate-pulse">Qwen3-Omni 分析中...</span>
+                <span className="text-xs text-accent animate-pulse">Qwen3-Omni 实时分析中...</span>
               </div>
               <AIFlowLine className="mb-4" />
               <div className="space-y-3">
@@ -482,156 +503,194 @@ export default function AnalyzePage() {
                 </div>
                 <div className="w-px bg-white/10" />
                 <div className="text-center">
-                  <div className="text-lg font-bold text-danger">{result.aiGeneratedProb}%</div>
+                  <div className={`text-lg font-bold ${result.aiGeneratedProb > 60 ? 'text-danger' : result.aiGeneratedProb > 30 ? 'text-warning' : 'text-success'}`}>
+                    {result.aiGeneratedProb}%
+                  </div>
                   <div className="text-[10px] text-muted">AI生成概率</div>
                 </div>
               </div>
             </div>
 
-            {/* Tab Switcher */}
-            <div className="flex gap-2">
-              {(['score', 'radar', 'detail'] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
-                    activeTab === tab
-                      ? 'bg-accent/15 text-accent border border-accent/20'
-                      : 'text-muted bg-white/[0.03] border border-white/5'
-                  }`}
-                >
-                  {tab === 'score' ? '风险热力' : tab === 'radar' ? '雷达图' : '详细分析'}
-                </button>
-              ))}
-            </div>
-
-            {/* Tab Content */}
-            <AnimatePresence mode="wait">
-              {activeTab === 'score' && (
-                <motion.div
-                  key="score"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="glass-card-sm p-4"
-                >
-                  <h3 className="text-sm font-semibold mb-4">风险因素热力图</h3>
-                  <RiskHeatMap data={result.riskFactors.map((f) => ({ label: f.label, value: f.score }))} />
-                </motion.div>
-              )}
-
-              {activeTab === 'radar' && (
-                <motion.div
-                  key="radar"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="glass-card-sm p-4 flex justify-center"
-                >
-                  <RadarChart
-                    data={result.riskFactors.map((f) => ({
-                      label: f.label.slice(0, 4),
-                      value: f.score,
-                    }))}
-                    size={240}
-                  />
-                </motion.div>
-              )}
-
-              {activeTab === 'detail' && (
-                <motion.div
-                  key="detail"
-                  initial={{ opacity: 0, x: -10 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: 10 }}
-                  className="space-y-3"
-                >
-                  {result.riskFactors.map((factor, i) => {
-                    const RiskIcon = riskFactorIcons[factor.type] || AlertTriangle;
-                    return (
-                      <motion.div
-                        key={i}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: i * 0.1 }}
-                        className="glass-card-sm p-4"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="flex items-center gap-2">
-                            <RiskIcon size={16} className={factor.score >= 70 ? 'text-danger' : factor.score >= 40 ? 'text-warning' : 'text-success'} strokeWidth={1.5} />
-                            <span className="text-sm font-medium">{factor.label}</span>
-                          </div>
-                          <span className={`text-xs font-bold ${
-                            factor.score >= 70 ? 'text-danger' : factor.score >= 40 ? 'text-warning' : 'text-success'
-                          }`}>
-                            {factor.score}%
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted leading-relaxed">{factor.description}</p>
-                      </motion.div>
-                    );
-                  })}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Emotion Analysis */}
-            <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
-                <Drama size={14} className="text-accent" strokeWidth={1.5} />
-                情绪传播分析
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted">主要情绪</span>
-                  <span className="text-xs text-danger font-medium">{result.emotionAnalysis.primary}</span>
+            {/* Safe content notice */}
+            {isLowRisk && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-card-sm p-4 border border-success/20"
+              >
+                <div className="flex items-start gap-3">
+                  <ShieldCheck size={20} className="text-success shrink-0 mt-0.5" strokeWidth={1.5} />
+                  <div>
+                    <p className="text-sm font-medium text-success">内容正常，未发现明显风险</p>
+                    <p className="text-xs text-muted mt-1">AI检测后未发现AI生成痕迹、情绪操控、身份冒充等风险特征。该内容看起来是正常内容。</p>
+                  </div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted">情绪强度</span>
-                  <span className="text-xs text-warning">{result.emotionAnalysis.intensity}%</span>
+              </motion.div>
+            )}
+
+            {/* Risk Factors - only show if there are any */}
+            {result.riskFactors.length > 0 && (
+              <div className="space-y-4">
+                {/* Tab Switcher */}
+                <div className="flex gap-2">
+                  {tabs.map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveTab(tab.key)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all ${
+                        activeTab === tab.key
+                          ? 'bg-accent/15 text-accent border border-accent/20'
+                          : 'text-muted bg-white/[0.03] border border-white/5'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-muted">操控风险</span>
-                  <span className="text-xs text-danger">{result.emotionAnalysis.manipulationRisk}%</span>
-                </div>
-                <div>
-                  <span className="text-xs text-muted">操控手法</span>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {result.emotionAnalysis.techniques.map((t, i) => (
-                      <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-danger/10 text-danger border border-danger/20">
-                        {t}
+
+                {/* Tab Content */}
+                <AnimatePresence mode="wait">
+                  {activeTab === 'score' && (
+                    <motion.div
+                      key="score"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      className="glass-card-sm p-4"
+                    >
+                      <h3 className="text-sm font-semibold mb-4">风险因素热力图</h3>
+                      <RiskHeatMap data={result.riskFactors.map((f) => ({ label: f.label, value: f.score }))} />
+                    </motion.div>
+                  )}
+
+                  {activeTab === 'radar' && (
+                    <motion.div
+                      key="radar"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      className="glass-card-sm p-4 flex justify-center"
+                    >
+                      <RadarChart
+                        data={result.riskFactors.map((f) => ({
+                          label: f.label.slice(0, 4),
+                          value: f.score,
+                        }))}
+                        size={240}
+                      />
+                    </motion.div>
+                  )}
+
+                  {activeTab === 'detail' && (
+                    <motion.div
+                      key="detail"
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10 }}
+                      className="space-y-3"
+                    >
+                      {result.riskFactors.map((factor, i) => {
+                        const RiskIcon = riskFactorIcons[factor.type] || AlertTriangle;
+                        return (
+                          <motion.div
+                            key={i}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.1 }}
+                            className="glass-card-sm p-4"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <RiskIcon size={16} className={factor.score >= 70 ? 'text-danger' : factor.score >= 40 ? 'text-warning' : 'text-success'} strokeWidth={1.5} />
+                                <span className="text-sm font-medium">{factor.label}</span>
+                              </div>
+                              <span className={`text-xs font-bold ${
+                                factor.score >= 70 ? 'text-danger' : factor.score >= 40 ? 'text-warning' : 'text-success'
+                              }`}>
+                                {factor.score}%
+                              </span>
+                            </div>
+                            <p className="text-xs text-muted leading-relaxed">{factor.description}</p>
+                          </motion.div>
+                        );
+                      })}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+
+            {/* Emotion Analysis - only show if there's something meaningful */}
+            {(result.emotionAnalysis.manipulationRisk > 10 || result.emotionAnalysis.techniques.length > 0) && (
+              <div className="glass-card-sm p-4">
+                <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                  <Drama size={14} className="text-accent" strokeWidth={1.5} />
+                  情绪传播分析
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted">主要情绪</span>
+                    <span className={`text-xs font-medium ${result.emotionAnalysis.manipulationRisk > 40 ? 'text-danger' : 'text-foreground/70'}`}>
+                      {result.emotionAnalysis.primary}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-muted">情绪强度</span>
+                    <span className={`text-xs ${result.emotionAnalysis.intensity > 60 ? 'text-warning' : 'text-foreground/70'}`}>
+                      {result.emotionAnalysis.intensity}%
+                    </span>
+                  </div>
+                  {result.emotionAnalysis.manipulationRisk > 10 && (
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-muted">操控风险</span>
+                      <span className={`text-xs ${result.emotionAnalysis.manipulationRisk > 50 ? 'text-danger' : 'text-warning'}`}>
+                        {result.emotionAnalysis.manipulationRisk}%
                       </span>
-                    ))}
+                    </div>
+                  )}
+                  {result.emotionAnalysis.techniques.length > 0 && (
+                    <div>
+                      <span className="text-xs text-muted">操控手法</span>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {result.emotionAnalysis.techniques.map((t, i) => (
+                          <span key={i} className="text-[10px] px-2 py-0.5 rounded-full bg-danger/10 text-danger border border-danger/20">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Spread Analysis - only show if velocity is significant */}
+            {result.spreadAnalysis.velocity > 3 && (
+              <div className="glass-card-sm p-4">
+                <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                  <Network size={14} className="text-accent" strokeWidth={1.5} />
+                  传播路径分析
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-xs text-muted">传播速度</span>
+                    <span className="text-xs text-accent">{result.spreadAnalysis.velocity}/10</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-muted">扩散范围</span>
+                    <span className="text-xs text-warning">{result.spreadAnalysis.reach}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-muted">传播模式</span>
+                    <span className="text-xs text-foreground/70">{result.spreadAnalysis.pattern}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-xs text-muted">潜在影响节点</span>
+                    <span className="text-xs text-danger">{result.spreadAnalysis.nodes}</span>
                   </div>
                 </div>
               </div>
-            </div>
-
-            {/* Spread Analysis */}
-            <div className="glass-card-sm p-4">
-              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
-                <Network size={14} className="text-accent" strokeWidth={1.5} />
-                传播路径分析
-              </h3>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-xs text-muted">传播速度</span>
-                  <span className="text-xs text-accent">{result.spreadAnalysis.velocity}/10</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-xs text-muted">扩散范围</span>
-                  <span className="text-xs text-warning">{result.spreadAnalysis.reach}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-xs text-muted">传播模式</span>
-                  <span className="text-xs text-foreground/70">{result.spreadAnalysis.pattern}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-xs text-muted">潜在影响节点</span>
-                  <span className="text-xs text-danger">{result.spreadAnalysis.nodes}</span>
-                </div>
-              </div>
-            </div>
+            )}
 
             {/* Verification Suggestions */}
             <div className="glass-card-sm p-4">
