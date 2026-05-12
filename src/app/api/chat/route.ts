@@ -3,6 +3,8 @@ import { deepseekChatStream, deepseekChat, type DeepSeekMessage } from '@/lib/de
 import { AGENT_SYSTEM_PROMPT } from '@/lib/ai';
 import { agentResponses } from '@/lib/mock-data';
 
+export const runtime = 'edge';
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();

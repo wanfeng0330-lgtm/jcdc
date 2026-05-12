@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { runFullPipeline } from '@/lib/pipeline';
 import { mockAnalysisResult } from '@/lib/mock-data';
 
+export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
