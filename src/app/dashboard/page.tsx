@@ -263,7 +263,7 @@ export default function DashboardPage() {
               '> AI检测模型 v3.2.1 运行正常',
               '> 今日拦截风险内容 4,462 条',
               '> AI拟声检测模块已更新',
-              '> 情绪分析引擎 v2.1 运行中',
+              '> UCAE 统一认知分析引擎运行中',
               '> 深度伪造检测准确率 94.2%',
             ].map((line, i) => (
               <motion.div

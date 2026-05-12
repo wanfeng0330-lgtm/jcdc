@@ -367,7 +367,7 @@ export default function LabPage() {
                 className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20"
               >
                 <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                <span className="text-[11px] text-accent font-medium">Qwen3-Omni 个性化评估</span>
+                <span className="text-[11px] text-accent font-medium">UCAE 统一认知分析引擎</span>
               </motion.div>
             )}
 

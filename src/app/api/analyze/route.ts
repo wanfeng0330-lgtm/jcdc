@@ -17,10 +17,10 @@ export async function POST(request: Request) {
       );
     }
 
-    // Run the full multi-step pipeline:
-    // Step 1: AI analyzes image, extracts text/claims
-    // Step 2: Web search for related content
-    // Step 3: AI verifies content against search results
+    // UCAE 统一认知分析引擎:
+    // Phase 1: 感知 - AI分析图片，提取文字/声明
+    // Phase 2: 检索 - 联网搜索相关内容
+    // Phase 3: 验证 - AI对比搜索结果进行验证
     const result = await runFullPipeline(type, imageBase64, inputContent, mimeType);
 
     const finalResult = {

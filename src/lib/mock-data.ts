@@ -12,7 +12,7 @@ export interface AnalysisResult {
   verification?: VerificationResult;
 }
 
-// 联网验证结果
+// UCAE 验证结果
 export interface VerificationResult {
   // 原始来源
   originalSource?: string | null;

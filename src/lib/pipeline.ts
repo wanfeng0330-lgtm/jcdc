@@ -186,7 +186,7 @@ export async function step3_verifyWithSearchResults(
   newsResults: SearchResponse,
   preliminaryAnalysis: AnalysisResult
 ): Promise<VerificationResult> {
-  const verifySystemPrompt = `你是"识界AI"事实核查系统。你的任务是根据联网搜索结果，验证用户提交内容的真实性。
+  const verifySystemPrompt = `你是"UCAE统一认知分析引擎"的验证模块。你的任务是根据联网搜索结果，验证用户提交内容的真实性。
 
 你需要判断：
 1. **原始来源**：这条信息最早来自哪里？有没有官方来源？

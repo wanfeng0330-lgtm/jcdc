@@ -1,5 +1,5 @@
-// Web Search Service - Tavily API
-// 联网搜索服务，用于事实核查和信息验证
+// UCAE 统一认知分析引擎 - 联网检索模块
+// 基于 Tavily API，用于事实核查和信息验证
 
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 const TAVILY_BASE_URL = 'https://api.tavily.com';

@@ -299,7 +299,7 @@ export default function AnalyzePage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-foreground truncate">{selectedFile.name}</p>
                         <p className="text-[10px] text-muted">
-                          {(selectedFile.size / 1024).toFixed(1)} KB · AI将检测内容并联网验证
+                          {(selectedFile.size / 1024).toFixed(1)} KB · UCAE将检测内容并联网验证
                         </p>
                       </div>
                       <button onClick={clearFile} className="p-1.5 rounded-lg hover:bg-white/5 text-muted">
@@ -367,7 +367,7 @@ export default function AnalyzePage() {
                   disabled={!inputText.trim()}
                   className="w-full mt-2 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
                 >
-                  检测并联网验证
+                  UCAE 检测验证
                 </button>
               </div>
             )}
