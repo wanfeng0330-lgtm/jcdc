@@ -160,24 +160,85 @@ export default function AgentPage() {
     }
   }, [isStreaming, messages]);
 
+  const renderInlineMarkdown = (text: string) => {
+    const parts: (string | JSX.Element)[] = [];
+    // Match **bold**, *italic*, `code`, [link](url)
+    const regex = /(\*\*(.+?)\*\*)|(\*(.+?)\*)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g;
+    let lastIndex = 0;
+    let match;
+    let key = 0;
+
+    while ((match = regex.exec(text)) !== null) {
+      // Add text before match
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+
+      if (match[1]) {
+        // **bold**
+        parts.push(<strong key={key++} className="font-semibold text-foreground">{match[2]}</strong>);
+      } else if (match[3]) {
+        // *italic*
+        parts.push(<em key={key++} className="italic text-foreground/80">{match[4]}</em>);
+      } else if (match[5]) {
+        // `code`
+        parts.push(<code key={key++} className="px-1 py-0.5 rounded bg-white/10 text-accent text-[11px] font-mono">{match[6]}</code>);
+      } else if (match[7]) {
+        // [link](url)
+        parts.push(<a key={key++} href={match[9]} target="_blank" rel="noopener noreferrer" className="text-accent underline">{match[8]}</a>);
+      }
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
+
   const renderContent = (content: string) => {
     return content.split('\n').map((line, i) => {
-      if (line.startsWith('**') && line.endsWith('**')) {
+      if (line.startsWith('### ')) {
         return (
-          <p key={i} className="font-semibold text-foreground mt-3 mb-1">
-            {line.replace(/\*\*/g, '')}
+          <p key={i} className="font-semibold text-foreground mt-4 mb-1 text-sm">
+            {renderInlineMarkdown(line.slice(4))}
           </p>
         );
       }
-      if (line.startsWith('- **')) {
-        const match = line.match(/- \*\*(.*?)\*\*[:：]\s*(.*)/);
+      if (line.startsWith('## ')) {
+        return (
+          <p key={i} className="font-bold text-foreground mt-4 mb-2 text-sm">
+            {renderInlineMarkdown(line.slice(3))}
+          </p>
+        );
+      }
+      if (line.startsWith('# ')) {
+        return (
+          <p key={i} className="font-bold text-foreground mt-4 mb-2">
+            {renderInlineMarkdown(line.slice(2))}
+          </p>
+        );
+      }
+      if (line.startsWith('**') && line.endsWith('**')) {
+        return (
+          <p key={i} className="font-semibold text-foreground mt-3 mb-1">
+            {renderInlineMarkdown(line.replace(/^\*\*|\*\*$/g, ''))}
+          </p>
+        );
+      }
+      if (line.startsWith('- **') || line.startsWith('* **')) {
+        const cleaned = line.replace(/^[-*]\s*/, '');
+        const match = cleaned.match(/\*\*(.*?)\*\*[:：]?\s*(.*)/);
         if (match) {
           return (
             <div key={i} className="flex items-start gap-2 my-1">
-              <span className="text-accent text-xs mt-0.5">▸</span>
+              <span className="text-accent text-xs mt-0.5 shrink-0">▸</span>
               <span>
                 <span className="font-medium text-accent">{match[1]}</span>
-                {match[2] && <span className="text-foreground/70">：{match[2]}</span>}
+                {match[2] && <span className="text-foreground/70">{match[2]}</span>}
               </span>
             </div>
           );
@@ -188,24 +249,31 @@ export default function AgentPage() {
         if (match) {
           return (
             <div key={i} className="flex items-start gap-2 my-1">
-              <span className="text-accent text-xs font-medium min-w-[16px]">{match[1]}.</span>
-              <span className="text-foreground/70">{match[2]}</span>
+              <span className="text-accent text-xs font-medium min-w-[16px] shrink-0">{match[1]}.</span>
+              <span className="text-foreground/70">{renderInlineMarkdown(match[2])}</span>
             </div>
           );
         }
       }
-      if (line.startsWith('- ')) {
+      if (line.startsWith('- ') || line.startsWith('* ')) {
         return (
           <div key={i} className="flex items-start gap-2 my-1">
-            <span className="text-accent text-xs mt-0.5">▸</span>
-            <span className="text-foreground/70">{line.slice(2)}</span>
+            <span className="text-accent text-xs mt-0.5 shrink-0">▸</span>
+            <span className="text-foreground/70">{renderInlineMarkdown(line.slice(2))}</span>
+          </div>
+        );
+      }
+      if (line.startsWith('> ')) {
+        return (
+          <div key={i} className="border-l-2 border-accent/30 pl-3 my-2 text-foreground/60 italic">
+            {renderInlineMarkdown(line.slice(2))}
           </div>
         );
       }
       if (line.trim() === '') return <div key={i} className="h-2" />;
       return (
         <p key={i} className="text-foreground/80 leading-relaxed">
-          {line}
+          {renderInlineMarkdown(line)}
         </p>
       );
     });
