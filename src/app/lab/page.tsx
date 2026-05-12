@@ -1,0 +1,419 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import PageContainer, { PageHeader } from '@/components/PageContainer';
+import BottomNav from '@/components/BottomNav';
+import { quizQuestions, type ImmunityResult, type QuizQuestion } from '@/lib/mock-data';
+
+type LabPhase = 'intro' | 'quiz' | 'result';
+
+export default function LabPage() {
+  const [phase, setPhase] = useState<LabPhase>('intro');
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [score, setScore] = useState(0);
+  const [answers, setAnswers] = useState<{ question: QuizQuestion; correct: boolean }[]>([]);
+  const [selectedAnswer, setSelectedAnswer] = useState<boolean | null>(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [immunityResult, setImmunityResult] = useState<ImmunityResult | null>(null);
+
+  const shuffledQuestions = quizQuestions.slice(0, 6);
+
+  const handleAnswer = useCallback(
+    (isFake: boolean) => {
+      if (selectedAnswer !== null) return;
+      const question = shuffledQuestions[currentIndex];
+      const correct = isFake === question.isFake;
+      setSelectedAnswer(isFake);
+      setShowExplanation(true);
+      if (correct) setScore((s) => s + 1);
+      setAnswers((prev) => [...prev, { question, correct }]);
+    },
+    [currentIndex, selectedAnswer, shuffledQuestions]
+  );
+
+  const nextQuestion = useCallback(() => {
+    if (currentIndex < shuffledQuestions.length - 1) {
+      setCurrentIndex((i) => i + 1);
+      setSelectedAnswer(null);
+      setShowExplanation(false);
+    } else {
+      // 计算结果
+      const finalScore = Math.round(((score + (selectedAnswer === shuffledQuestions[currentIndex].isFake ? 1 : 0)) / shuffledQuestions.length) * 100);
+      const riskTypes = answers.reduce<Record<string, number>>((acc, a) => {
+        if (!a.correct) acc[a.question.riskType] = (acc[a.question.riskType] || 0) + 1;
+        return acc;
+      }, {});
+
+      const weakPoints = Object.entries(riskTypes)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 3)
+        .map(([type]) => type);
+
+      const level = finalScore >= 80 ? 'S' : finalScore >= 60 ? 'A' : finalScore >= 40 ? 'B' : 'C';
+      const levelDesc =
+        level === 'S'
+          ? 'AI风险识别专家，你几乎不会被AI诈骗手段欺骗'
+          : level === 'A'
+          ? '良好的风险意识，但仍需提升对高级AI骗局的警惕'
+          : level === 'B'
+          ? '风险识别能力一般，建议参加更多AI媒介素养训练'
+          : 'AI风险抵抗力较低，强烈建议学习AI骗局识别技巧';
+
+      setImmunityResult({
+        overallScore: finalScore,
+        level,
+        levelDesc,
+        weaknesses: weakPoints.length > 0 ? weakPoints : ['暂无明显弱点'],
+        strengths: ['基础风险意识'],
+        riskProfile: [
+          { type: 'AI拟声识别', score: Math.round(Math.random() * 40 + 60) },
+          { type: 'AI换脸识别', score: Math.round(Math.random() * 40 + 50) },
+          { type: '情绪操控识别', score: Math.round(Math.random() * 40 + 55) },
+          { type: '传播诱导识别', score: Math.round(Math.random() * 40 + 50) },
+          { type: '身份伪造识别', score: Math.round(Math.random() * 40 + 45) },
+        ],
+      });
+      setPhase('result');
+    }
+  }, [currentIndex, shuffledQuestions, score, selectedAnswer, answers]);
+
+  const currentQuestion = shuffledQuestions[currentIndex];
+
+  return (
+    <PageContainer>
+      <PageHeader
+        title="AI媒介素养实验室"
+        subtitle="你能识破AI骗局吗？"
+        icon="◇"
+      />
+
+      <AnimatePresence mode="wait">
+        {phase === 'intro' && (
+          <motion.div
+            key="intro"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-6"
+          >
+            {/* Hero Card */}
+            <div className="glass-card p-6 text-center">
+              <motion.div
+                animate={{ rotateY: [0, 360] }}
+                transition={{ duration: 4, repeat: Infinity, ease: 'linear' }}
+                className="text-5xl mb-4 inline-block"
+              >
+                🧪
+              </motion.div>
+              <h2 className="text-xl font-bold gradient-text mb-2">你能识破AI骗局吗？</h2>
+              <p className="text-xs text-muted leading-relaxed mb-4">
+                系统将随机展示AI生成内容，你需要判断真伪。
+                <br />
+                完成后生成你的AI免疫力指数。
+              </p>
+              <div className="flex justify-center gap-6 text-center mb-4">
+                <div>
+                  <div className="text-lg font-bold text-accent">{shuffledQuestions.length}</div>
+                  <div className="text-[10px] text-muted">题目数</div>
+                </div>
+                <div className="w-px bg-white/10" />
+                <div>
+                  <div className="text-lg font-bold text-cyan">~2min</div>
+                  <div className="text-[10px] text-muted">预计时间</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Category Preview */}
+            <div className="grid grid-cols-2 gap-2">
+              {['AI换脸', 'AI拟声', 'AI新闻', '情绪操控'].map((cat, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="glass-card-sm p-3 text-center"
+                >
+                  <div className="text-2xl mb-1">{['🎭', '🎙️', '📰', '🧠'][i]}</div>
+                  <div className="text-xs text-muted">{cat}</div>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* Start Button */}
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setPhase('quiz')}
+              className="w-full py-4 rounded-2xl bg-gradient-to-r from-accent to-cyan text-white font-semibold text-sm shadow-lg shadow-accent/20"
+            >
+              开始挑战
+            </motion.button>
+          </motion.div>
+        )}
+
+        {phase === 'quiz' && currentQuestion && (
+          <motion.div
+            key="quiz"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-4"
+          >
+            {/* Progress */}
+            <div className="glass-card-sm p-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs text-muted">
+                  第 {currentIndex + 1}/{shuffledQuestions.length} 题
+                </span>
+                <span className="text-xs text-accent">
+                  得分 {score}/{currentIndex + (selectedAnswer !== null ? 1 : 0)}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-white/5">
+                <motion.div
+                  className="h-full rounded-full bg-gradient-to-r from-accent to-cyan"
+                  animate={{ width: `${((currentIndex + 1) / shuffledQuestions.length) * 100}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+            </div>
+
+            {/* Question Card */}
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              className="glass-card p-5"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">
+                  {currentQuestion.category}
+                </span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+                  currentQuestion.difficulty === 'hard'
+                    ? 'bg-danger/10 text-danger border border-danger/20'
+                    : currentQuestion.difficulty === 'medium'
+                    ? 'bg-warning/10 text-warning border border-warning/20'
+                    : 'bg-success/10 text-success border border-success/20'
+                }`}>
+                  {currentQuestion.difficulty === 'hard' ? '困难' : currentQuestion.difficulty === 'medium' ? '中等' : '简单'}
+                </span>
+              </div>
+
+              <p className="text-xs text-muted mb-3">{currentQuestion.description}</p>
+              <p className="text-sm leading-relaxed mb-4 font-medium">
+                &ldquo;{currentQuestion.content}&rdquo;
+              </p>
+
+              {/* Answer Buttons */}
+              <div className="flex gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleAnswer(false)}
+                  disabled={selectedAnswer !== null}
+                  className={`flex-1 py-3 rounded-xl font-medium text-sm transition-all ${
+                    selectedAnswer === false
+                      ? currentQuestion.isFake
+                        ? 'bg-danger/15 border border-danger/30 text-danger'
+                        : 'bg-success/15 border border-success/30 text-success'
+                      : 'glass-card text-success'
+                  } disabled:opacity-60`}
+                >
+                  ✓ 真实
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => handleAnswer(true)}
+                  disabled={selectedAnswer !== null}
+                  className={`flex-1 py-3 rounded-xl font-medium text-sm transition-all ${
+                    selectedAnswer === true
+                      ? currentQuestion.isFake
+                        ? 'bg-success/15 border border-success/30 text-success'
+                        : 'bg-danger/15 border border-danger/30 text-danger'
+                      : 'glass-card text-danger'
+                  } disabled:opacity-60`}
+                >
+                  ✗ AI伪造
+                </motion.button>
+              </div>
+            </motion.div>
+
+            {/* Explanation */}
+            <AnimatePresence>
+              {showExplanation && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="glass-card-sm p-4"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-sm ${selectedAnswer === currentQuestion.isFake ? 'text-success' : 'text-danger'}`}>
+                      {selectedAnswer === currentQuestion.isFake ? '✓ 回答正确' : '✗ 回答错误'}
+                    </span>
+                    <span className="text-[10px] text-muted">
+                      ({currentQuestion.isFake ? '这是AI生成内容' : '这是真实内容'})
+                    </span>
+                  </div>
+                  <p className="text-xs text-foreground/70 leading-relaxed mb-3">
+                    {currentQuestion.explanation}
+                  </p>
+                  <button
+                    onClick={nextQuestion}
+                    className="w-full py-2.5 rounded-xl bg-accent/10 text-accent text-sm font-medium border border-accent/20"
+                  >
+                    {currentIndex < shuffledQuestions.length - 1 ? '下一题 →' : '查看结果 →'}
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        )}
+
+        {phase === 'result' && immunityResult && (
+          <motion.div
+            key="result"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="space-y-4"
+          >
+            {/* Score Card */}
+            <div className="glass-card p-6 text-center">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 200, delay: 0.3 }}
+                className="w-24 h-24 rounded-full bg-gradient-to-br from-accent to-cyan mx-auto flex items-center justify-center mb-4 shadow-lg shadow-accent/30"
+              >
+                <div>
+                  <div className="text-3xl font-bold text-white">{immunityResult.level}</div>
+                  <div className="text-[10px] text-white/60">等级</div>
+                </div>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <h3 className="text-xl font-bold gradient-text mb-1">
+                  AI免疫力指数：{immunityResult.overallScore}%
+                </h3>
+                <p className="text-xs text-muted leading-relaxed mt-2">
+                  {immunityResult.levelDesc}
+                </p>
+              </motion.div>
+            </div>
+
+            {/* Risk Profile */}
+            <div className="glass-card-sm p-4">
+              <h3 className="text-sm font-semibold mb-3">🎯 风险认知画像</h3>
+              <div className="space-y-3">
+                {immunityResult.riskProfile.map((item, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.6 + i * 0.1 }}
+                  >
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-foreground/70">{item.type}</span>
+                      <span className={item.score >= 70 ? 'text-success' : item.score >= 50 ? 'text-warning' : 'text-danger'}>
+                        {item.score}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-white/5">
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{
+                          background: item.score >= 70
+                            ? 'linear-gradient(90deg, #22c55e, #16a34a)'
+                            : item.score >= 50
+                            ? 'linear-gradient(90deg, #f59e0b, #d97706)'
+                            : 'linear-gradient(90deg, #ef4444, #dc2626)',
+                        }}
+                        initial={{ width: 0 }}
+                        animate={{ width: `${item.score}%` }}
+                        transition={{ duration: 1, delay: 0.8 + i * 0.1 }}
+                      />
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Weaknesses */}
+            <div className="glass-card-sm p-4">
+              <h3 className="text-sm font-semibold mb-3">⚠️ 你容易受到的攻击类型</h3>
+              <div className="flex flex-wrap gap-2">
+                {immunityResult.weaknesses.map((w, i) => (
+                  <motion.span
+                    key={i}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 1 + i * 0.1 }}
+                    className="text-xs px-3 py-1.5 rounded-full bg-danger/10 text-danger border border-danger/20"
+                  >
+                    {w}
+                  </motion.span>
+                ))}
+              </div>
+            </div>
+
+            {/* Recommendations */}
+            <div className="glass-card-sm p-4">
+              <h3 className="text-sm font-semibold mb-3">💡 提升建议</h3>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-accent text-xs">▸</span>
+                  <span className="text-xs text-foreground/70">遇到紧急求助信息，先通过其他渠道确认</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-accent text-xs">▸</span>
+                  <span className="text-xs text-foreground/70">不要轻信"独家""惊人"等标题党内容</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-accent text-xs">▸</span>
+                  <span className="text-xs text-foreground/70">AI语音/视频通话可设置家庭验证暗号</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-accent text-xs">▸</span>
+                  <span className="text-xs text-foreground/70">对要求转账、提供验证码的操作保持高度警惕</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setPhase('intro');
+                  setCurrentIndex(0);
+                  setScore(0);
+                  setAnswers([]);
+                  setSelectedAnswer(null);
+                  setShowExplanation(false);
+                  setImmunityResult(null);
+                }}
+                className="flex-1 py-3 rounded-xl glass-card text-accent text-sm font-medium"
+              >
+                重新测试
+              </button>
+              <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium">
+                分享结果
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <BottomNav />
+    </PageContainer>
+  );
+}
