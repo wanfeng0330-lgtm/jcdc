@@ -32,6 +32,33 @@ export interface VerificationResult {
   relatedSources: RelatedSource[];
   // AI综合判断
   aiSummary: string;
+  // 图片对比结果
+  imageComparison?: ImageComparisonResult;
+}
+
+// 图片对比结果
+export interface ImageComparisonResult {
+  // 是否找到可对比的网络图片
+  hasComparisonImages: boolean;
+  // 对比的图片列表
+  comparisons: ImageComparison[];
+  // AI综合对比结论
+  comparisonSummary: string;
+}
+
+export interface ImageComparison {
+  // 网络图片 URL
+  imageUrl: string;
+  // 来源页面标题
+  sourceTitle: string;
+  // 来源页面 URL
+  sourceUrl: string;
+  // 视觉相似度 (0-100)
+  visualSimilarity: number;
+  // 关系类型
+  relationship: 'same_image' | 'same_scene' | 'edited_version' | 'similar_content' | 'unrelated';
+  // 具体差异描述
+  differenceDescription: string;
 }
 
 export interface RelatedSource {

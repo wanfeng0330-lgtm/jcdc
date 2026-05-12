@@ -1,12 +1,12 @@
-// 多步验证流水线
-// Pipeline: 图片分析 → 提取关键词 → 联网搜索 → 对比来源 → 综合判断
+// UCAE 统一认知分析引擎 (Unified Cognitive Analysis Engine)
+// 流程: 内容感知 → 关键词提取 → 联网检索 → 图片对比 → 来源验证 → 综合研判
 
 import { chatCompletion, ANALYZE_SYSTEM_PROMPT, type ChatMessage } from './ai';
-import { webSearch, newsSearch, generateSearchQueries, type SearchResponse } from './search';
-import type { AnalysisResult, VerificationResult, RelatedSource } from './mock-data';
+import { webSearch, newsSearch, generateSearchQueries, downloadImageAsBase64, type SearchResponse } from './search';
+import type { AnalysisResult, VerificationResult, RelatedSource, ImageComparisonResult, ImageComparison } from './mock-data';
 
 /**
- * Step 1: AI analyzes image content and extracts text/claims
+ * Phase 1: AI感知 - 分析图片内容并提取文字/声明
  * Returns the raw AI analysis + extracted text for searching
  */
 export async function step1_analyzeContent(
@@ -18,8 +18,8 @@ export async function step1_analyzeContent(
   // Build the user message for content analysis
   let userMessage: ChatMessage;
 
-  // Step 1 prompt: First analyze the image, extract text, describe what you see
-  const step1SystemPrompt = `你是"识界AI"内容分析系统。你的任务是：
+  // Phase 1 prompt: First analyze the image, extract text, describe what you see
+  const step1SystemPrompt = `你是"UCAE统一认知分析引擎"的感知模块。你的任务是：
 1. 仔细分析用户上传的内容（图片或文本）
 2. 如果是图片：描述图片中的所有文字、场景、人物、物体
 3. 如果是文本：提取关键声明和主张
@@ -119,7 +119,7 @@ export async function step1_analyzeContent(
       };
     }
   } catch (e) {
-    console.error('Step 1 parse error:', e);
+    console.error('Phase 1 parse error:', e);
   }
 
   // Fallback
@@ -139,13 +139,14 @@ export async function step1_analyzeContent(
 }
 
 /**
- * Step 2: Search the web for related content
- * Uses extracted keywords and claims from Step 1
+ * Phase 2: 联网检索 - 搜索相关内容
+ * Uses extracted keywords and claims from Phase 1
  */
 export async function step2_webSearch(
   contentType: string,
   extractedText: string,
-  imageDescription: string
+  imageDescription: string,
+  hasImage: boolean
 ): Promise<{ searchResults: SearchResponse; newsResults: SearchResponse; searchQueries: string[] }> {
   // Generate search queries from extracted text
   const searchQueries = generateSearchQueries(contentType, extractedText, imageDescription);
@@ -158,12 +159,13 @@ export async function step2_webSearch(
     };
   }
 
-  // Search with the first query (most relevant)
+  // Search with the first query (most relevant), include images if user uploaded an image
   const primaryQuery = searchQueries[0];
   const searchResults = await webSearch(primaryQuery, {
     maxResults: 5,
     searchDepth: 'advanced',
     includeAnswer: true,
+    includeImages: hasImage, // Only request images when user uploaded an image
   });
 
   // Also search for news/timeline
@@ -176,7 +178,137 @@ export async function step2_webSearch(
 }
 
 /**
- * Step 3: AI compares search results with original content
+ * Phase 2.5: 图片视觉对比 - 下载搜索到的图片，用AI对比
+ * 将用户原图与搜索到的网络图片进行视觉对比
+ */
+export async function step2_5_imageComparison(
+  userImageBase64: string,
+  searchImages: string[],
+  searchResults: SearchResponse
+): Promise<ImageComparisonResult | undefined> {
+  if (!searchImages || searchImages.length === 0) {
+    return undefined;
+  }
+
+  // Download up to 3 images for comparison (to limit API cost)
+  const imagesToCompare: { url: string; base64: string; sourceTitle: string; sourceUrl: string }[] = [];
+
+  for (const imgUrl of searchImages.slice(0, 3)) {
+    const base64 = await downloadImageAsBase64(imgUrl);
+    if (base64) {
+      // Find the corresponding search result for source info
+      const matchingResult = searchResults.results.find(r => imgUrl.includes(new URL(r.url).hostname) || r.url === imgUrl);
+      imagesToCompare.push({
+        url: imgUrl,
+        base64,
+        sourceTitle: matchingResult?.title || '网络来源',
+        sourceUrl: matchingResult?.url || imgUrl,
+      });
+    }
+  }
+
+  if (imagesToCompare.length === 0) {
+    return {
+      hasComparisonImages: false,
+      comparisons: [],
+      comparisonSummary: '搜索到的图片无法下载进行对比。',
+    };
+  }
+
+  // Prepare the multi-image comparison prompt
+  const comparisonPrompt = `你是"UCAE统一认知分析引擎"的视觉对比模块。用户上传了一张图片，我们通过网络搜索找到了可能相关的图片。请对比用户上传的图片和每张网络图片，判断它们的关系。
+
+关系类型：
+- same_image: 完全相同的图片（可能是转载）
+- same_scene: 同一场景/事件的不同照片
+- edited_version: 经过编辑/裁剪/滤镜处理的版本
+- similar_content: 主题相似但内容不同
+- unrelated: 完全无关
+
+你必须以JSON格式返回：
+{
+  "comparisons": [
+    {
+      "visualSimilarity": <0-100的相似度>,
+      "relationship": "<关系类型>",
+      "differenceDescription": "<描述具体差异，如裁剪区域、滤镜效果、添加的文字等>"
+    }
+  ],
+  "comparisonSummary": "<100字以内的综合对比结论>"
+}`;
+
+  // Build message with user image + all comparison images
+  const contentParts: { type: string; text?: string; image_url?: { url: string } }[] = [
+    {
+      type: 'text',
+      text: `第一张是用户上传的原始图片，后面${imagesToCompare.length}张是通过网络搜索找到的相关图片。请逐一对比。`,
+    },
+  ];
+
+  // Add user image
+  const userDataUrl = userImageBase64.startsWith('data:')
+    ? userImageBase64
+    : `data:image/jpeg;base64,${userImageBase64}`;
+  contentParts.push({ type: 'image_url', image_url: { url: userDataUrl } });
+
+  // Add comparison images with labels
+  imagesToCompare.forEach((img, i) => {
+    contentParts.push({
+      type: 'text',
+      text: `--- 网络图片 ${i + 1}（来源：${img.sourceTitle}）---`,
+    });
+    contentParts.push({ type: 'image_url', image_url: { url: img.base64 } });
+  });
+
+  const aiResponse = await chatCompletion({
+    messages: [
+      { role: 'system', content: comparisonPrompt },
+      { role: 'user', content: contentParts as ChatMessage['content'] },
+    ],
+    temperature: 0.2,
+    max_tokens: 2000,
+  });
+
+  try {
+    const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const comparisons: ImageComparison[] = imagesToCompare.map((img, i) => ({
+        imageUrl: img.url,
+        sourceTitle: img.sourceTitle,
+        sourceUrl: img.sourceUrl,
+        visualSimilarity: parsed.comparisons?.[i]?.visualSimilarity ?? 0,
+        relationship: parsed.comparisons?.[i]?.relationship ?? 'unrelated',
+        differenceDescription: parsed.comparisons?.[i]?.differenceDescription ?? '无法对比',
+      }));
+
+      return {
+        hasComparisonImages: true,
+        comparisons,
+        comparisonSummary: parsed.comparisonSummary || '图片对比完成，请查看详细结果。',
+      };
+    }
+  } catch (e) {
+    console.error('Phase 2.5 parse error:', e);
+  }
+
+  // Fallback - still return the downloaded images with basic info
+  return {
+    hasComparisonImages: true,
+    comparisons: imagesToCompare.map((img) => ({
+      imageUrl: img.url,
+      sourceTitle: img.sourceTitle,
+      sourceUrl: img.sourceUrl,
+      visualSimilarity: 0,
+      relationship: 'unrelated' as const,
+      differenceDescription: 'AI对比失败，请手动对比',
+    })),
+    comparisonSummary: 'AI视觉对比模块异常，已返回搜索到的图片供参考。',
+  };
+}
+
+/**
+ * Phase 3: 验证 - AI对比搜索结果与原始内容
  * Determines: source, timeline, out-of-context, misleading, old news
  */
 export async function step3_verifyWithSearchResults(
@@ -264,7 +396,7 @@ ${newsResults.results.length > 0 ? newsResults.results.map((r, i) => `${i + 1}. 
       return JSON.parse(jsonMatch[0]) as VerificationResult;
     }
   } catch (e) {
-    console.error('Step 3 parse error:', e);
+    console.error('Phase 3 parse error:', e);
   }
 
   // Fallback verification result
@@ -299,7 +431,7 @@ ${newsResults.results.length > 0 ? newsResults.results.map((r, i) => `${i + 1}. 
 }
 
 /**
- * Full pipeline: Step 1 + Step 2 + Step 3
+ * UCAE 完整分析流程: 感知 → 检索 → 图片对比 → 验证
  */
 export async function runFullPipeline(
   type: string,
@@ -307,7 +439,7 @@ export async function runFullPipeline(
   textContent?: string,
   mimeType?: string
 ): Promise<AnalysisResult> {
-  // Step 1: Analyze content and extract text
+  // Phase 1: 感知 - Analyze content and extract text
   const { analysis, extractedText, imageDescription } = await step1_analyzeContent(
     type,
     imageBase64,
@@ -315,14 +447,25 @@ export async function runFullPipeline(
     mimeType
   );
 
-  // Step 2: Search the web (only if there's extracted text)
+  // Phase 2: 检索 - Search the web (only if there's extracted text)
   const { searchResults, newsResults, searchQueries } = await step2_webSearch(
     type,
     extractedText,
-    imageDescription
+    imageDescription,
+    !!imageBase64
   );
 
-  // Step 3: Verify with search results (only if search found something)
+  // Phase 2.5: 图片对比 - Compare with web images (only if user uploaded an image)
+  let imageComparison: ImageComparisonResult | undefined;
+  if (imageBase64 && searchResults.images && searchResults.images.length > 0) {
+    imageComparison = await step2_5_imageComparison(
+      imageBase64,
+      searchResults.images,
+      searchResults
+    );
+  }
+
+  // Phase 3: 验证 - Verify with search results (only if search found something)
   let verification: VerificationResult | undefined;
   if (searchQueries.length > 0) {
     verification = await step3_verifyWithSearchResults(
@@ -332,6 +475,11 @@ export async function runFullPipeline(
       newsResults,
       analysis
     );
+
+    // Attach image comparison results to verification
+    if (imageComparison) {
+      verification.imageComparison = imageComparison;
+    }
 
     // Update credibility score based on verification results
     if (verification.isOldNewsRecycled || verification.isOutOfContext || verification.hasMisleadingSpread) {
@@ -343,6 +491,20 @@ export async function runFullPipeline(
       analysis.credibilityScore = Math.max(analysis.credibilityScore, 60);
       if (analysis.riskLevel === 'high' && !verification.isOutOfContext) {
         analysis.riskLevel = 'medium';
+      }
+    }
+
+    // If image comparison found same_image or edited_version, adjust score
+    if (imageComparison) {
+      const hasSameImage = imageComparison.comparisons.some(c => c.relationship === 'same_image');
+      const hasEditedVersion = imageComparison.comparisons.some(c => c.relationship === 'edited_version');
+      if (hasEditedVersion) {
+        analysis.credibilityScore = Math.min(analysis.credibilityScore, 30);
+        analysis.riskLevel = 'high';
+      }
+      if (hasSameImage) {
+        // Same image found online - could be legitimate repost or unauthorized use
+        analysis.verificationSuggestions.push('该图片在网络上有相同版本，注意确认原始出处');
       }
     }
 
@@ -363,6 +525,9 @@ export async function runFullPipeline(
       relatedSources: [],
       aiSummary: '内容较短或无可提取关键词，未进行联网搜索验证。',
     };
+    if (imageComparison) {
+      verification.imageComparison = imageComparison;
+    }
   }
 
   return {

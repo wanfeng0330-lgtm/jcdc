@@ -37,7 +37,7 @@ import BottomNav from '@/components/BottomNav';
 import { RiskGauge, RadarChart, RiskHeatMap } from '@/components/Charts';
 import { AIFlowLine } from '@/components/AIAnimations';
 import { mockAnalysisResult } from '@/lib/mock-data';
-import type { AnalysisResult, VerificationResult } from '@/lib/mock-data';
+import type { AnalysisResult, VerificationResult, ImageComparison } from '@/lib/mock-data';
 
 type FileType = 'image' | 'video' | 'audio' | 'text' | 'screenshot';
 type AnalysisPhase = 'idle' | 'uploading' | 'analyzing' | 'result';
@@ -61,13 +61,14 @@ const tabs: { key: TabType; label: string }[] = [
 type StepStatus = 'pending' | 'active' | 'done';
 
 const pipelineSteps: { label: string; icon: LucideIcon; status: StepStatus }[] = [
-  { label: '内容识别与文字提取', icon: Search, status: 'pending' },
-  { label: 'AI风险特征分析', icon: Brain, status: 'pending' },
-  { label: '联网搜索相关信息', icon: Globe, status: 'pending' },
-  { label: '对比来源与时间线', icon: Clock, status: 'pending' },
-  { label: '断章取义/旧闻检测', icon: Eye, status: 'pending' },
-  { label: '内容可信度建模', icon: BarChart2, status: 'pending' },
-  { label: '传播学风险评估', icon: RefreshCw, status: 'pending' },
+  { label: 'UCAE 内容感知与文字提取', icon: Search, status: 'pending' },
+  { label: 'UCAE 风险特征识别', icon: Brain, status: 'pending' },
+  { label: 'UCAE 联网检索相关信息', icon: Globe, status: 'pending' },
+  { label: 'UCAE 图片视觉对比', icon: Eye, status: 'pending' },
+  { label: 'UCAE 来源与时间线对比', icon: Clock, status: 'pending' },
+  { label: 'UCAE 断章取义/旧闻检测', icon: BookOpen, status: 'pending' },
+  { label: 'UCAE 可信度建模', icon: BarChart2, status: 'pending' },
+  { label: 'UCAE 传播学风险评估', icon: RefreshCw, status: 'pending' },
 ];
 
 export default function AnalyzePage() {
@@ -572,6 +573,67 @@ export default function AnalyzePage() {
                       </p>
                     </div>
                   )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Image Comparison */}
+            {verification?.imageComparison && verification.imageComparison.hasComparisonImages && verification.imageComparison.comparisons.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-card-sm p-4 border border-accent/15"
+              >
+                <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                  <Eye size={14} className="text-accent" strokeWidth={1.5} />
+                  图片视觉对比
+                </h3>
+                <p className="text-xs text-foreground/80 leading-relaxed mb-3">
+                  {verification.imageComparison.comparisonSummary}
+                </p>
+                <div className="space-y-3">
+                  {verification.imageComparison.comparisons.map((comp, i) => {
+                    const relLabel: Record<string, { text: string; color: string }> = {
+                      same_image: { text: '完全相同', color: 'bg-warning/10 text-warning border-warning/20' },
+                      same_scene: { text: '同一场景', color: 'bg-accent/10 text-accent border-accent/20' },
+                      edited_version: { text: '编辑版本', color: 'bg-danger/10 text-danger border-danger/20' },
+                      similar_content: { text: '内容相似', color: 'bg-white/5 text-muted border-white/10' },
+                      unrelated: { text: '无关', color: 'bg-white/5 text-muted border-white/10' },
+                    };
+                    const rel = relLabel[comp.relationship] || relLabel.unrelated;
+                    return (
+                      <motion.div
+                        key={i}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: i * 0.1 }}
+                        className="p-3 rounded-xl bg-white/[0.02] border border-white/5"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-white/5 border border-white/10">
+                            <img src={comp.imageUrl} alt={`对比图${i+1}`} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-full border ${rel.color}`}>
+                                {rel.text}
+                              </span>
+                              <span className={`text-[10px] font-medium ${comp.visualSimilarity > 70 ? 'text-danger' : comp.visualSimilarity > 40 ? 'text-warning' : 'text-muted'}`}>
+                                相似度 {comp.visualSimilarity}%
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-foreground/60 truncate mb-1">{comp.sourceTitle}</p>
+                            <p className="text-[10px] text-muted leading-relaxed">{comp.differenceDescription}</p>
+                            {comp.sourceUrl && (
+                              <a href={comp.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-[9px] text-accent/60 hover:text-accent inline-flex items-center gap-0.5 mt-1">
+                                来源 <ExternalLink size={8} strokeWidth={1.5} />
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
                 </div>
               </motion.div>
             )}

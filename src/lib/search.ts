@@ -16,6 +16,7 @@ export interface SearchResponse {
   query: string;
   results: SearchResult[];
   answer?: string;
+  images?: string[]; // Tavily 返回的图片 URL 列表
 }
 
 /**
@@ -29,6 +30,7 @@ export async function webSearch(
     searchDepth?: 'basic' | 'advanced';
     includeAnswer?: boolean;
     topic?: 'general' | 'news';
+    includeImages?: boolean;
   }
 ): Promise<SearchResponse> {
   if (!TAVILY_API_KEY) {
@@ -48,6 +50,7 @@ export async function webSearch(
         max_results: options?.maxResults ?? 5,
         search_depth: options?.searchDepth ?? 'basic',
         include_answer: options?.includeAnswer ?? true,
+        include_images: options?.includeImages ?? false,
         topic: options?.topic ?? 'general',
       }),
     });
@@ -70,6 +73,7 @@ export async function webSearch(
         publishedDate: r.published_date || undefined,
       })),
       answer: data.answer || undefined,
+      images: data.images || undefined,
     };
   } catch (error) {
     console.error('Web search error:', error);
@@ -90,6 +94,39 @@ export async function newsSearch(
     includeAnswer: true,
     topic: 'news',
   });
+}
+
+/**
+ * Download an image from URL and convert to base64
+ * Used for visual comparison with user-uploaded images
+ */
+export async function downloadImageAsBase64(imageUrl: string): Promise<string | null> {
+  try {
+    const response = await fetch(imageUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; UCAE-Bot/1.0)',
+      },
+      signal: AbortSignal.timeout(8000), // 8s timeout
+    });
+
+    if (!response.ok) return null;
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.startsWith('image/')) return null;
+
+    // Limit image size to 4MB
+    const contentLength = response.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > 4 * 1024 * 1024) return null;
+
+    const arrayBuffer = await response.arrayBuffer();
+    if (arrayBuffer.byteLength > 4 * 1024 * 1024) return null;
+
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    return `data:${contentType};base64,${base64}`;
+  } catch (error) {
+    console.error('Image download error:', imageUrl, error);
+    return null;
+  }
 }
 
 /**
