@@ -14,6 +14,10 @@ import {
   RotateCcw,
   Share2,
   ChevronRight,
+  Eye,
+  Volume2,
+  FileText,
+  LightbulbIcon,
   type LucideIcon,
 } from 'lucide-react';
 import PageContainer, { PageHeader } from '@/components/PageContainer';
@@ -22,12 +26,14 @@ import { quizQuestions, type ImmunityResult, type QuizQuestion } from '@/lib/moc
 
 type LabPhase = 'intro' | 'quiz' | 'result';
 
-const categoryIcons: { label: string; icon: LucideIcon; color: string }[] = [
-  { label: 'AI换脸', icon: ScanFace, color: 'text-pink-400' },
-  { label: 'AI拟声', icon: Mic, color: 'text-purple-400' },
-  { label: 'AI新闻', icon: Newspaper, color: 'text-blue-400' },
-  { label: '情绪操控', icon: Brain, color: 'text-amber-400' },
+const categoryIcons: { label: string; icon: LucideIcon; color: string; count: number }[] = [
+  { label: 'AI人脸识别', icon: ScanFace, color: 'text-pink-400', count: quizQuestions.filter(q => q.category === 'AI人脸' || q.category === 'AI图片').length },
+  { label: 'AI拟声辨别', icon: Mic, color: 'text-purple-400', count: quizQuestions.filter(q => q.category === 'AI拟声' || q.category === '真实音频').length },
+  { label: '真假新闻', icon: Newspaper, color: 'text-blue-400', count: quizQuestions.filter(q => q.category === 'AI新闻' || q.category === '真实新闻' || q.category === '真实信息').length },
+  { label: '情绪操控', icon: Brain, color: 'text-amber-400', count: quizQuestions.filter(q => q.category === '情绪操控' || q.category === '传播诱导').length },
 ];
+
+const TOTAL_QUESTIONS = 8;
 
 export default function LabPage() {
   const [phase, setPhase] = useState<LabPhase>('intro');
@@ -36,11 +42,27 @@ export default function LabPage() {
   const [answers, setAnswers] = useState<{ question: QuizQuestion; correct: boolean }[]>([]);
   const [selectedAnswer, setSelectedAnswer] = useState<boolean | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [showHint, setShowHint] = useState(false);
   const [immunityResult, setImmunityResult] = useState<ImmunityResult | null>(null);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [resultSource, setResultSource] = useState<string>('');
 
-  const shuffledQuestions = quizQuestions.slice(0, 6);
+  // Shuffle and pick questions, ensuring a mix of types
+  const [shuffledQuestions] = useState(() => {
+    const imageQs = quizQuestions.filter(q => q.imageUrl);
+    const audioQs = quizQuestions.filter(q => q.audioDescription);
+    const textQs = quizQuestions.filter(q => !q.imageUrl && !q.audioDescription);
+
+    const pick = <T,>(arr: T[], n: number): T[] => [...arr].sort(() => Math.random() - 0.5).slice(0, n);
+
+    const picked = [
+      ...pick(imageQs, 4),
+      ...pick(audioQs, 1),
+      ...pick(textQs, 3),
+    ].sort(() => Math.random() - 0.5);
+
+    return picked.slice(0, TOTAL_QUESTIONS);
+  });
 
   const handleAnswer = useCallback(
     (isFake: boolean) => {
@@ -60,15 +82,14 @@ export default function LabPage() {
       setCurrentIndex((i) => i + 1);
       setSelectedAnswer(null);
       setShowExplanation(false);
+      setShowHint(false);
     } else {
-      // Calculate final score
       const finalScore = Math.round(((score + (selectedAnswer === shuffledQuestions[currentIndex].isFake ? 1 : 0)) / shuffledQuestions.length) * 100);
       const correctCount = score + (selectedAnswer === shuffledQuestions[currentIndex].isFake ? 1 : 0);
 
       setIsEvaluating(true);
 
       try {
-        // Try to call AI for personalized evaluation
         const response = await fetch('/api/lab', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -91,7 +112,6 @@ export default function LabPage() {
           throw new Error('Invalid response');
         }
       } catch {
-        // Fallback: calculate locally
         const riskTypes = answers.reduce<Record<string, number>>((acc, a) => {
           if (!a.correct) acc[a.question.riskType] = (acc[a.question.riskType] || 0) + 1;
           return acc;
@@ -136,11 +156,21 @@ export default function LabPage() {
 
   const currentQuestion = shuffledQuestions[currentIndex];
 
+  const getCategoryColor = (category: string) => {
+    if (category.includes('AI') || category.includes('情绪') || category.includes('传播')) return 'text-danger';
+    return 'text-success';
+  };
+
+  const getCategoryBg = (category: string) => {
+    if (category.includes('AI') || category.includes('情绪') || category.includes('传播')) return 'bg-danger/10 text-danger border-danger/20';
+    return 'bg-success/10 text-success border-success/20';
+  };
+
   return (
     <PageContainer>
       <PageHeader
         title="AI媒介素养实验室"
-        subtitle="你能识破AI骗局吗？"
+        subtitle="真实素材 · 真假辨别 · 提升免疫力"
         icon="◇"
       />
 
@@ -166,19 +196,24 @@ export default function LabPage() {
               </motion.div>
               <h2 className="text-xl font-bold gradient-text mb-2">你能识破AI骗局吗？</h2>
               <p className="text-xs text-muted leading-relaxed mb-4">
-                系统将随机展示AI生成内容，你需要判断真伪。
+                系统将展示真实素材和AI生成内容，你需要判断真伪。
                 <br />
-                完成后由AI生成你的免疫力指数。
+                包含真实照片、AI人脸、新闻文本和音频场景。
               </p>
               <div className="flex justify-center gap-6 text-center mb-4">
                 <div>
-                  <div className="text-lg font-bold text-accent">{shuffledQuestions.length}</div>
+                  <div className="text-lg font-bold text-accent">{TOTAL_QUESTIONS}</div>
                   <div className="text-[10px] text-muted">题目数</div>
                 </div>
                 <div className="w-px bg-white/10" />
                 <div>
-                  <div className="text-lg font-bold text-cyan">~2min</div>
+                  <div className="text-lg font-bold text-cyan">~3min</div>
                   <div className="text-[10px] text-muted">预计时间</div>
+                </div>
+                <div className="w-px bg-white/10" />
+                <div>
+                  <div className="text-lg font-bold text-pink-400">{quizQuestions.filter(q => q.imageUrl).length}</div>
+                  <div className="text-[10px] text-muted">真实图片</div>
                 </div>
               </div>
             </div>
@@ -196,7 +231,8 @@ export default function LabPage() {
                     className="glass-card-sm p-3 text-center"
                   >
                     <CatIcon size={24} className={`mx-auto mb-1 ${cat.color}`} strokeWidth={1.5} />
-                    <div className="text-xs text-muted">{cat.label}</div>
+                    <div className="text-xs text-foreground/70">{cat.label}</div>
+                    <div className="text-[10px] text-muted">{cat.count}题</div>
                   </motion.div>
                 );
               })}
@@ -250,6 +286,7 @@ export default function LabPage() {
               exit={{ opacity: 0, x: -50 }}
               className="glass-card p-5"
             >
+              {/* Category & Difficulty Tags */}
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20">
                   {currentQuestion.category}
@@ -263,12 +300,83 @@ export default function LabPage() {
                 }`}>
                   {currentQuestion.difficulty === 'hard' ? '困难' : currentQuestion.difficulty === 'medium' ? '中等' : '简单'}
                 </span>
+                {currentQuestion.imageUrl && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-pink-400/10 text-pink-400 border border-pink-400/20 inline-flex items-center gap-1">
+                    <Eye size={8} strokeWidth={1.5} /> 图片题
+                  </span>
+                )}
+                {currentQuestion.audioDescription && (
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-400/10 text-purple-400 border border-purple-400/20 inline-flex items-center gap-1">
+                    <Volume2 size={8} strokeWidth={1.5} /> 音频题
+                  </span>
+                )}
               </div>
 
               <p className="text-xs text-muted mb-3">{currentQuestion.description}</p>
+
+              {/* Image Display */}
+              {currentQuestion.imageUrl && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="mb-4 rounded-xl overflow-hidden border border-white/10 bg-white/[0.02]"
+                >
+                  <img
+                    src={currentQuestion.imageUrl}
+                    alt="待判断的内容"
+                    className="w-full max-h-72 object-contain"
+                  />
+                </motion.div>
+              )}
+
+              {/* Audio Description */}
+              {currentQuestion.audioDescription && (
+                <motion.div
+                  initial={{ opacity: 0, y: 5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mb-4 p-4 rounded-xl bg-purple-400/5 border border-purple-400/15"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-purple-400/10 flex items-center justify-center">
+                      <Volume2 size={16} className="text-purple-400" strokeWidth={1.5} />
+                    </div>
+                    <span className="text-xs text-purple-400 font-medium">音频场景</span>
+                  </div>
+                  <p className="text-xs text-foreground/70 leading-relaxed">
+                    {currentQuestion.audioDescription}
+                  </p>
+                </motion.div>
+              )}
+
+              {/* Question Content */}
               <p className="text-sm leading-relaxed mb-4 font-medium">
                 &ldquo;{currentQuestion.content}&rdquo;
               </p>
+
+              {/* Hint Button */}
+              {currentQuestion.hint && !showExplanation && (
+                <div className="mb-3">
+                  <button
+                    onClick={() => setShowHint(!showHint)}
+                    className="text-[10px] text-accent/60 hover:text-accent inline-flex items-center gap-1 transition-colors"
+                  >
+                    <LightbulbIcon size={10} strokeWidth={1.5} />
+                    {showHint ? '隐藏提示' : '需要提示？'}
+                  </button>
+                  <AnimatePresence>
+                    {showHint && (
+                      <motion.p
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="text-[10px] text-accent/50 mt-1"
+                      >
+                        💡 {currentQuestion.hint}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+                </div>
+              )}
 
               {/* Answer Buttons */}
               <div className="flex gap-3">
@@ -318,13 +426,28 @@ export default function LabPage() {
                     <span className={`text-sm ${selectedAnswer === currentQuestion.isFake ? 'text-success' : 'text-danger'}`}>
                       {selectedAnswer === currentQuestion.isFake ? '✓ 回答正确' : '✗ 回答错误'}
                     </span>
-                    <span className="text-[10px] text-muted">
-                      ({currentQuestion.isFake ? '这是AI生成内容' : '这是真实内容'})
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${getCategoryBg(currentQuestion.category)}`}>
+                      {currentQuestion.isFake ? 'AI生成内容' : '真实内容'}
                     </span>
                   </div>
                   <p className="text-xs text-foreground/70 leading-relaxed mb-3">
                     {currentQuestion.explanation}
                   </p>
+
+                  {/* Telltale Signs */}
+                  {currentQuestion.telltaleSigns && currentQuestion.telltaleSigns.length > 0 && (
+                    <div className="mb-3 p-2.5 rounded-lg bg-accent/5 border border-accent/10">
+                      <p className="text-[10px] text-accent font-medium mb-1.5">🔍 关键识别线索：</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {currentQuestion.telltaleSigns.map((sign, i) => (
+                          <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-accent/10 text-accent/80 border border-accent/15">
+                            {sign}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <button
                     onClick={nextQuestion}
                     disabled={isEvaluating}
@@ -399,6 +522,36 @@ export default function LabPage() {
               </motion.div>
             </div>
 
+            {/* Answer Review */}
+            <div className="glass-card-sm p-4">
+              <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                <Eye size={14} className="text-accent" strokeWidth={1.5} />
+                答题回顾
+              </h3>
+              <div className="space-y-2">
+                {answers.map((a, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 + i * 0.08 }}
+                    className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-white/[0.02]"
+                  >
+                    <span className={`text-xs ${a.correct ? 'text-success' : 'text-danger'}`}>
+                      {a.correct ? '✓' : '✗'}
+                    </span>
+                    <span className="text-[10px] text-muted w-10 shrink-0">{a.question.category}</span>
+                    <span className="text-[10px] text-foreground/60 truncate flex-1">
+                      {a.question.content.length > 20 ? a.question.content.slice(0, 20) + '...' : a.question.content}
+                    </span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded ${a.question.isFake ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
+                      {a.question.isFake ? 'AI' : '真实'}
+                    </span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
             {/* Risk Profile */}
             <div className="glass-card-sm p-4">
               <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
@@ -469,19 +622,23 @@ export default function LabPage() {
               <div className="space-y-2">
                 <div className="flex items-start gap-2">
                   <span className="text-accent text-xs">▸</span>
-                  <span className="text-xs text-foreground/70">遇到紧急求助信息，先通过其他渠道确认</span>
+                  <span className="text-xs text-foreground/70">遇到AI人脸照片，重点观察耳朵、牙齿、虹膜和发际线</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-accent text-xs">▸</span>
-                  <span className="text-xs text-foreground/70">不要轻信"独家""惊人"等标题党内容</span>
+                  <span className="text-xs text-foreground/70">接到要求转账的电话，务必通过视频通话或其他渠道确认</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-accent text-xs">▸</span>
+                  <span className="text-xs text-foreground/70">不要轻信"独家""惊人"等标题党内容，查证信息来源</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-accent text-xs">▸</span>
+                  <span className="text-xs text-foreground/70">对制造紧迫感、恐惧情绪的信息保持警惕</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-accent text-xs">▸</span>
                   <span className="text-xs text-foreground/70">AI语音/视频通话可设置家庭验证暗号</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-accent text-xs">▸</span>
-                  <span className="text-xs text-foreground/70">对要求转账、提供验证码的操作保持高度警惕</span>
                 </div>
               </div>
             </div>
@@ -496,6 +653,7 @@ export default function LabPage() {
                   setAnswers([]);
                   setSelectedAnswer(null);
                   setShowExplanation(false);
+                  setShowHint(false);
                   setImmunityResult(null);
                   setResultSource('');
                 }}
