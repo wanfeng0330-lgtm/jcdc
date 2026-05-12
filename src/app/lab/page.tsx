@@ -33,7 +33,7 @@ const categoryIcons: { label: string; icon: LucideIcon; color: string; count: nu
   { label: '情绪操控', icon: Brain, color: 'text-amber-400', count: quizQuestions.filter(q => q.category === '情绪操控' || q.category === '传播诱导').length },
 ];
 
-const TOTAL_QUESTIONS = 8;
+const TOTAL_QUESTIONS = 10;
 
 export default function LabPage() {
   const [phase, setPhase] = useState<LabPhase>('intro');
@@ -57,8 +57,8 @@ export default function LabPage() {
 
     const picked = [
       ...pick(imageQs, 4),
-      ...pick(audioQs, 1),
-      ...pick(textQs, 3),
+      ...pick(audioQs, 2),
+      ...pick(textQs, 6),
     ].sort(() => Math.random() - 0.5);
 
     return picked.slice(0, TOTAL_QUESTIONS);
