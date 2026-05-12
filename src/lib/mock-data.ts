@@ -8,6 +8,38 @@ export interface AnalysisResult {
   verificationSuggestions: string[];
   emotionAnalysis: EmotionAnalysis;
   spreadAnalysis: SpreadAnalysis;
+  // 新增：联网验证结果
+  verification?: VerificationResult;
+}
+
+// 联网验证结果
+export interface VerificationResult {
+  // 原始来源
+  originalSource?: string | null;
+  originalUrl?: string | null;
+  // 首次发布时间
+  firstPublishedDate?: string | null;
+  // 是否旧闻翻炒
+  isOldNewsRecycled: boolean;
+  oldNewsOriginalDate?: string | null;
+  // 是否断章取义
+  isOutOfContext: boolean;
+  contextExplanation?: string | null;
+  // 是否存在误导传播
+  hasMisleadingSpread: boolean;
+  misleadingExplanation?: string | null;
+  // 搜索到的相关来源
+  relatedSources: RelatedSource[];
+  // AI综合判断
+  aiSummary: string;
+}
+
+export interface RelatedSource {
+  title: string;
+  url: string;
+  snippet: string;
+  publishedDate?: string;
+  isDebunked?: boolean; // 是否已被辟谣
 }
 
 export interface RiskFactor {
