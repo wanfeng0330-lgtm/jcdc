@@ -2,6 +2,4 @@
 name = "shijie-ai"
 compatibility_date = "2025-05-12"
 compatibility_flags = ["nodejs_compat"]
-
-# Pages 项目不需要 specify [site] 或 [build]
-# 部署通过 `npx @cloudflare/next-on-pages` 或 Cloudflare Dashboard 完成
+pages_build_output_dir = ".vercel/output/static"
