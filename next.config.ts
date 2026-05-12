@@ -6,8 +6,10 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: true,
   },
-  // 确保服务端组件正确渲染
-  serverExternalPackages: [],
+  // 强制所有服务端路由使用 Edge Runtime (Cloudflare Workers 要求)
+  experimental: {
+    runtime: 'edge',
+  },
 };
 
 export default nextConfig;
