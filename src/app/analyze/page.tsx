@@ -37,11 +37,11 @@ import BottomNav from '@/components/BottomNav';
 import { RiskGauge, RadarChart, RiskHeatMap } from '@/components/Charts';
 import { AIFlowLine } from '@/components/AIAnimations';
 import { mockAnalysisResult } from '@/lib/mock-data';
-import type { AnalysisResult, VerificationResult, ImageComparison } from '@/lib/mock-data';
+import type { AnalysisResult, VerificationResult, ImageComparison, MultiSignalRisk, RiskSignal, SignalSeverity } from '@/lib/mock-data';
 
 type FileType = 'image' | 'video' | 'audio' | 'text' | 'screenshot';
 type AnalysisPhase = 'idle' | 'uploading' | 'analyzing' | 'result';
-type TabType = 'score' | 'radar' | 'detail' | 'verify';
+type TabType = 'signals' | 'score' | 'radar' | 'detail' | 'verify';
 
 const fileTypes: { type: FileType; icon: LucideIcon; label: string; accept: string }[] = [
   { type: 'image', icon: ImageIcon, label: '图片', accept: 'image/*' },
@@ -52,6 +52,7 @@ const fileTypes: { type: FileType; icon: LucideIcon; label: string; accept: stri
 ];
 
 const tabs: { key: TabType; label: string }[] = [
+  { key: 'signals', label: '多信号矩阵' },
   { key: 'verify', label: '联网验证' },
   { key: 'score', label: '风险热力' },
   { key: 'radar', label: '雷达图' },
@@ -67,7 +68,7 @@ const pipelineSteps: { label: string; icon: LucideIcon; status: StepStatus }[] =
   { label: 'UCAE 图片视觉对比', icon: Eye, status: 'pending' },
   { label: 'UCAE 来源与时间线对比', icon: Clock, status: 'pending' },
   { label: 'UCAE 断章取义/旧闻检测', icon: BookOpen, status: 'pending' },
-  { label: 'UCAE 可信度建模', icon: BarChart2, status: 'pending' },
+  { label: 'UCAE 多信号风险聚合', icon: BarChart2, status: 'pending' },
   { label: 'UCAE 传播学风险评估', icon: RefreshCw, status: 'pending' },
 ];
 
@@ -145,7 +146,7 @@ export default function AnalyzePage() {
 
     setPhase('analyzing');
     setAnalysisSource('');
-    setActiveTab('verify');
+    setActiveTab('signals');
 
     advanceSteps(async () => {
       try {
@@ -208,7 +209,7 @@ export default function AnalyzePage() {
     setFileMimeType('');
     setCurrentSteps(pipelineSteps);
     setAnalysisSource('');
-    setActiveTab('verify');
+    setActiveTab('signals');
     if (fileInputRef.current) fileInputRef.current.value = '';
   }, []);
 
@@ -490,6 +491,80 @@ export default function AnalyzePage() {
               </div>
             </div>
 
+            {/* Multi-Signal Risk Matrix Overview */}
+            {result.multiSignalRisk && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="glass-card-sm p-4 border border-accent/15"
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold inline-flex items-center gap-2">
+                    <ShieldAlert size={14} className="text-accent" strokeWidth={1.5} />
+                    多信号风险分析
+                  </h3>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                    result.multiSignalRisk.overallRiskLevel === 'critical' ? 'bg-danger/15 text-danger border border-danger/20' :
+                    result.multiSignalRisk.overallRiskLevel === 'high' ? 'bg-danger/10 text-danger border border-danger/15' :
+                    result.multiSignalRisk.overallRiskLevel === 'medium' ? 'bg-warning/10 text-warning border border-warning/15' :
+                    result.multiSignalRisk.overallRiskLevel === 'low' ? 'bg-accent/10 text-accent border border-accent/15' :
+                    'bg-success/10 text-success border border-success/15'
+                  }`}>
+                    {result.multiSignalRisk.overallRiskLevel === 'critical' ? '极高风险' :
+                     result.multiSignalRisk.overallRiskLevel === 'high' ? '高风险' :
+                     result.multiSignalRisk.overallRiskLevel === 'medium' ? '中风险' :
+                     result.multiSignalRisk.overallRiskLevel === 'low' ? '低风险' : '安全'}
+                  </span>
+                </div>
+
+                {/* Signal Grid */}
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  {result.multiSignalRisk.signals.map((signal) => {
+                    const severityConfig: Record<SignalSeverity, { bg: string; border: string; dot: string; text: string; label: string }> = {
+                      strong: { bg: 'bg-danger/5', border: 'border-danger/20', dot: 'bg-danger', text: 'text-danger', label: '强' },
+                      medium: { bg: 'bg-warning/5', border: 'border-warning/20', dot: 'bg-warning', text: 'text-warning', label: '中' },
+                      weak: { bg: 'bg-accent/5', border: 'border-accent/15', dot: 'bg-accent', text: 'text-accent', label: '弱' },
+                      none: { bg: 'bg-success/5', border: 'border-success/15', dot: 'bg-success', text: 'text-success', label: '无' },
+                    };
+                    const cfg = severityConfig[signal.severity];
+                    return (
+                      <div key={signal.id} className={`p-2.5 rounded-xl ${cfg.bg} border ${cfg.border} transition-all`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs">{signal.icon}</span>
+                            <span className="text-[11px] font-medium text-foreground/80">{signal.name}</span>
+                          </div>
+                          {signal.detected ? (
+                            <span className={`text-[9px] font-bold ${cfg.text} ${cfg.bg} px-1.5 py-0.5 rounded`}>
+                              {cfg.label}
+                            </span>
+                          ) : (
+                            <span className="text-[9px] text-muted">—</span>
+                          )}
+                        </div>
+                        {/* Severity bar */}
+                        <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                          <motion.div
+                            initial={{ width: 0 }}
+                            animate={{ width: `${signal.severityScore}%` }}
+                            transition={{ duration: 0.8, delay: 0.3 }}
+                            className={`h-full rounded-full ${cfg.dot}`}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* System Summary */}
+                <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                  <p className="text-[11px] text-foreground/70 leading-relaxed">
+                    {result.multiSignalRisk.systemSummary}
+                  </p>
+                </div>
+              </motion.div>
+            )}
+
             {/* Verification Summary - the key new section */}
             {verification && (
               <motion.div
@@ -658,6 +733,8 @@ export default function AnalyzePage() {
             {/* Risk Factors - Tab area */}
             <div className="flex gap-2">
               {tabs.map((tab) => {
+                // Hide signals tab if no multi-signal data
+                if (tab.key === 'signals' && !result.multiSignalRisk) return null;
                 // Hide verify tab if no verification data
                 if (tab.key === 'verify' && (!verification || verification.relatedSources.length === 0)) return null;
                 // Hide score/radar/detail if no risk factors
@@ -679,6 +756,95 @@ export default function AnalyzePage() {
             </div>
 
             <AnimatePresence mode="wait">
+              {/* Multi-Signal Matrix Tab */}
+              {activeTab === 'signals' && result.multiSignalRisk && (
+                <motion.div
+                  key="signals"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 10 }}
+                  className="space-y-3"
+                >
+                  {/* Signal Detail Table */}
+                  <div className="glass-card-sm p-4">
+                    <h3 className="text-sm font-semibold mb-4 inline-flex items-center gap-2">
+                      <Brain size={14} className="text-accent" strokeWidth={1.5} />
+                      信号详细分析
+                    </h3>
+                    {/* Table Header */}
+                    <div className="grid grid-cols-[1fr_60px_60px_1fr] gap-2 px-2 pb-2 border-b border-white/5">
+                      <span className="text-[10px] text-muted font-medium">信号</span>
+                      <span className="text-[10px] text-muted font-medium text-center">风险</span>
+                      <span className="text-[10px] text-muted font-medium text-center">强度</span>
+                      <span className="text-[10px] text-muted font-medium">证据</span>
+                    </div>
+                    {/* Table Rows */}
+                    <div className="divide-y divide-white/[0.03]">
+                      {result.multiSignalRisk.signals.map((signal, i) => {
+                        const severityLabel: Record<SignalSeverity, string> = {
+                          strong: '强',
+                          medium: '中',
+                          weak: '弱',
+                          none: '无',
+                        };
+                        const severityColor: Record<SignalSeverity, string> = {
+                          strong: 'text-danger',
+                          medium: 'text-warning',
+                          weak: 'text-accent',
+                          none: 'text-muted',
+                        };
+                        return (
+                          <motion.div
+                            key={signal.id}
+                            initial={{ opacity: 0, y: 5 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.08 }}
+                            className="grid grid-cols-[1fr_60px_60px_1fr] gap-2 px-2 py-3 items-center"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm">{signal.icon}</span>
+                              <span className="text-xs text-foreground/80">{signal.name}</span>
+                            </div>
+                            <div className="text-center">
+                              {signal.detected ? (
+                                <span className={`text-[10px] font-bold ${severityColor[signal.severity]}`}>
+                                  {signal.severity === 'none' ? '—' : '⚠'}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-success">✓</span>
+                              )}
+                            </div>
+                            <div className="text-center">
+                              <span className={`text-[10px] font-medium ${severityColor[signal.severity]}`}>
+                                {severityLabel[signal.severity]}
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-muted leading-relaxed line-clamp-2">{signal.evidence}</p>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Category Radar */}
+                  <div className="glass-card-sm p-4">
+                    <h3 className="text-sm font-semibold mb-3 inline-flex items-center gap-2">
+                      <BarChart2 size={14} className="text-accent" strokeWidth={1.5} />
+                      六维风险画像
+                    </h3>
+                    <div className="flex justify-center">
+                      <RadarChart
+                        data={result.multiSignalRisk.signals.map(s => ({
+                          label: s.name.slice(0, 4),
+                          value: s.severityScore,
+                        }))}
+                        size={220}
+                      />
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Verify Tab - Related Sources */}
               {activeTab === 'verify' && verification && verification.relatedSources.length > 0 && (
                 <motion.div

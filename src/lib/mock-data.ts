@@ -8,8 +8,60 @@ export interface AnalysisResult {
   verificationSuggestions: string[];
   emotionAnalysis: EmotionAnalysis;
   spreadAnalysis: SpreadAnalysis;
-  // 新增：联网验证结果
+  // 联网验证结果
   verification?: VerificationResult;
+  // 多信号风险分析
+  multiSignalRisk?: MultiSignalRisk;
+}
+
+// ============== 多信号风险分析 ==============
+
+// 单个风险信号的严重程度
+export type SignalSeverity = 'strong' | 'medium' | 'weak' | 'none';
+// 信号是否被检测到
+export type SignalDetected = boolean;
+
+// 单个风险信号
+export interface RiskSignal {
+  // 信号标识
+  id: string;
+  // 信号名称
+  name: string;
+  // 信号图标
+  icon: string;
+  // 信号类别：视觉/情感/来源/传播/标题/时间线
+  category: 'visual' | 'emotion' | 'source' | 'spread' | 'headline' | 'timeline';
+  // 是否检测到该信号
+  detected: SignalDetected;
+  // 严重程度
+  severity: SignalSeverity;
+  // 严重程度数值 (0-100)
+  severityScore: number;
+  // 信号描述/证据
+  evidence: string;
+  // 来自哪个分析阶段
+  source: 'perception' | 'search' | 'verification' | 'comparison';
+}
+
+// 多信号风险分析结果
+export interface MultiSignalRisk {
+  // 所有信号列表
+  signals: RiskSignal[];
+  // 综合风险等级
+  overallRiskLevel: 'critical' | 'high' | 'medium' | 'low' | 'safe';
+  // 综合风险评分 (0-100)
+  overallRiskScore: number;
+  // 各类别汇总
+  categorySummary: {
+    visual: { detected: boolean; maxSeverity: SignalSeverity; score: number };
+    emotion: { detected: boolean; maxSeverity: SignalSeverity; score: number };
+    source: { detected: boolean; maxSeverity: SignalSeverity; score: number };
+    spread: { detected: boolean; maxSeverity: SignalSeverity; score: number };
+    headline: { detected: boolean; maxSeverity: SignalSeverity; score: number };
+    timeline: { detected: boolean; maxSeverity: SignalSeverity; score: number };
+  };
+  // 系统综合分析结论
+  systemSummary: string;
 }
 
 // UCAE 验证结果

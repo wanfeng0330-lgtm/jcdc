@@ -3,7 +3,7 @@
 
 import { chatCompletion, ANALYZE_SYSTEM_PROMPT, type ChatMessage } from './ai';
 import { webSearch, newsSearch, generateSearchQueries, downloadImageAsBase64, type SearchResponse } from './search';
-import type { AnalysisResult, VerificationResult, RelatedSource, ImageComparisonResult, ImageComparison } from './mock-data';
+import type { AnalysisResult, VerificationResult, RelatedSource, ImageComparisonResult, ImageComparison, MultiSignalRisk, RiskSignal, SignalSeverity } from './mock-data';
 
 /**
  * Phase 1: AI感知 - 分析图片内容并提取文字/声明
@@ -431,7 +431,209 @@ ${newsResults.results.length > 0 ? newsResults.results.map((r, i) => `${i + 1}. 
 }
 
 /**
- * UCAE 完整分析流程: 感知 → 检索 → 图片对比 → 验证
+ * Phase 4: 多信号风险聚合 - 将所有分析阶段的信号综合为多信号风险矩阵
+ * 整合感知(Phase1) + 检索(Phase2) + 对比(Phase2.5) + 验证(Phase3) 的信号
+ */
+export function aggregateMultiSignalRisk(
+  analysis: AnalysisResult,
+  verification?: VerificationResult
+): MultiSignalRisk {
+  const signals: RiskSignal[] = [];
+
+  // ---- 1. 视觉信号：AI纹理异常 ----
+  const aiProb = analysis.aiGeneratedProb;
+  const deepfakeFactor = analysis.riskFactors.find(f => f.type === 'deepfake');
+  const hasEditedVersion = verification?.imageComparison?.comparisons.some(c => c.relationship === 'edited_version');
+
+  signals.push({
+    id: 'ai_texture',
+    name: 'AI纹理异常',
+    icon: '🔍',
+    category: 'visual',
+    detected: aiProb > 30 || !!deepfakeFactor || !!hasEditedVersion,
+    severity: aiProb > 70 ? 'strong' : aiProb > 40 ? 'medium' : aiProb > 20 ? 'weak' : 'none',
+    severityScore: aiProb,
+    evidence: aiProb > 70
+      ? `AI生成概率${aiProb}%，高度疑似AI生成内容`
+      : aiProb > 40
+      ? `AI生成概率${aiProb}%，存在一定AI痕迹`
+      : aiProb > 20
+      ? `AI生成概率${aiProb}%，有轻微AI特征`
+      : `AI生成概率${aiProb}%，未检测到明显AI纹理异常`,
+    source: 'perception',
+  });
+
+  // ---- 2. 情感信号：情绪诱导 ----
+  const emotionFactor = analysis.riskFactors.find(f => f.type === 'emotion');
+  const manipulationRisk = analysis.emotionAnalysis.manipulationRisk;
+  const hasEmotionTechniques = analysis.emotionAnalysis.techniques.length > 0;
+
+  signals.push({
+    id: 'emotion_manipulation',
+    name: '情绪诱导',
+    icon: '🎭',
+    category: 'emotion',
+    detected: manipulationRisk > 20 || hasEmotionTechniques || !!emotionFactor,
+    severity: manipulationRisk > 60 ? 'strong' : manipulationRisk > 35 ? 'medium' : manipulationRisk > 15 ? 'weak' : 'none',
+    severityScore: manipulationRisk,
+    evidence: manipulationRisk > 60
+      ? `强情绪诱导（${manipulationRisk}%），操控手法：${analysis.emotionAnalysis.techniques.join('、') || '恐惧诉求'}`
+      : manipulationRisk > 35
+      ? `中等情绪诱导（${manipulationRisk}%），主要情绪：${analysis.emotionAnalysis.primary}`
+      : manipulationRisk > 15
+      ? `轻微情绪诱导倾向（${manipulationRisk}%）`
+      : `未检测到明显情绪诱导（${manipulationRisk}%）`,
+    source: 'perception',
+  });
+
+  // ---- 3. 来源信号：来源不明 ----
+  const noOriginalSource = verification && !verification.originalSource;
+  const identityFactor = analysis.riskFactors.find(f => f.type === 'identity');
+
+  signals.push({
+    id: 'unknown_source',
+    name: '来源不明',
+    icon: '❓',
+    category: 'source',
+    detected: !!noOriginalSource || !!identityFactor,
+    severity: (noOriginalSource && identityFactor) ? 'strong' : (noOriginalSource || identityFactor) ? 'medium' : 'none',
+    severityScore: (noOriginalSource && identityFactor) ? 80 : noOriginalSource ? 55 : identityFactor ? 50 : 5,
+    evidence: verification
+      ? (noOriginalSource
+        ? (identityFactor ? '未找到原始来源，且存在身份冒充' : '联网搜索未找到可追溯的原始来源')
+        : `来源可追溯：${verification.originalSource}`)
+      : (identityFactor ? '内容中存在身份信任诱导，来源存疑' : '未进行联网搜索，无法判断来源'),
+    source: verification ? 'verification' : 'perception',
+  });
+
+  // ---- 4. 传播信号：传播异常 ----
+  const spreadFactor = analysis.riskFactors.find(f => f.type === 'spread');
+  const hasMisleading = verification?.hasMisleadingSpread;
+  const highVelocity = analysis.spreadAnalysis.velocity > 6;
+
+  signals.push({
+    id: 'spread_anomaly',
+    name: '传播异常',
+    icon: '🔄',
+    category: 'spread',
+    detected: !!spreadFactor || !!hasMisleading || highVelocity,
+    severity: (hasMisleading && highVelocity) ? 'strong' : (hasMisleading || highVelocity || !!spreadFactor) ? 'medium' : 'none',
+    severityScore: (hasMisleading && highVelocity) ? 85 : hasMisleading ? 65 : highVelocity ? 55 : spreadFactor ? 45 : 5,
+    evidence: hasMisleading
+      ? `检测到误导传播：${verification?.misleadingExplanation || '内容在传播中被篡改或误导'}`
+      : highVelocity
+      ? `传播速度异常（${analysis.spreadAnalysis.velocity}/10），模式：${analysis.spreadAnalysis.pattern}`
+      : spreadFactor
+      ? '内容结构符合传播诱导模板'
+      : '传播模式正常，未发现异常',
+    source: verification ? 'verification' : 'perception',
+  });
+
+  // ---- 5. 标题信号：标题夸张 ----
+  const titleFactor = analysis.riskFactors.find(f => f.type === 'title');
+
+  signals.push({
+    id: 'headline_exaggeration',
+    name: '标题夸张',
+    icon: '📰',
+    category: 'headline',
+    detected: !!titleFactor,
+    severity: titleFactor ? (titleFactor.score > 70 ? 'strong' : titleFactor.score > 40 ? 'medium' : 'weak') : 'none',
+    severityScore: titleFactor?.score || 5,
+    evidence: titleFactor
+      ? titleFactor.description
+      : '标题表述正常，未发现夸张特征',
+    source: 'perception',
+  });
+
+  // ---- 6. 时间线信号：时间线矛盾 ----
+  const isOldNews = verification?.isOldNewsRecycled;
+  const isOutOfContext = verification?.isOutOfContext;
+  const timelineContradiction = isOldNews || isOutOfContext;
+
+  signals.push({
+    id: 'timeline_contradiction',
+    name: '时间线矛盾',
+    icon: '⏳',
+    category: 'timeline',
+    detected: !!timelineContradiction,
+    severity: (isOldNews && isOutOfContext) ? 'strong' : timelineContradiction ? 'medium' : 'none',
+    severityScore: (isOldNews && isOutOfContext) ? 85 : isOldNews ? 65 : isOutOfContext ? 60 : 5,
+    evidence: isOldNews
+      ? `旧闻翻炒：原始事件日期为${verification?.oldNewsOriginalDate || '未知'}${isOutOfContext ? '，且断章取义' : ''}`
+      : isOutOfContext
+      ? `断章取义：${verification?.contextExplanation || '内容脱离原始语境'}`
+      : '时间线正常，未发现矛盾',
+    source: 'verification',
+  });
+
+  // ---- 计算分类汇总 ----
+  const categories = ['visual', 'emotion', 'source', 'spread', 'headline', 'timeline'] as const;
+
+  const categorySummary = Object.fromEntries(
+    categories.map(cat => {
+      const catSignals = signals.filter(s => s.category === cat);
+      const detected = catSignals.some(s => s.detected);
+      const maxScore = Math.max(...catSignals.map(s => s.severityScore));
+      const maxSeverity: SignalSeverity = maxScore > 65 ? 'strong' : maxScore > 40 ? 'medium' : maxScore > 15 ? 'weak' : 'none';
+      return [cat, { detected, maxSeverity, score: maxScore }];
+    })
+  ) as MultiSignalRisk['categorySummary'];
+
+  // ---- 计算综合风险 ----
+  const detectedCount = signals.filter(s => s.detected).length;
+  const strongCount = signals.filter(s => s.severity === 'strong').length;
+  const avgScore = Math.round(signals.reduce((sum, s) => sum + s.severityScore, 0) / signals.length);
+
+  let overallRiskLevel: MultiSignalRisk['overallRiskLevel'];
+  let overallRiskScore: number;
+
+  if (strongCount >= 3 || avgScore > 65) {
+    overallRiskLevel = 'critical';
+    overallRiskScore = Math.min(95, Math.round(avgScore * 1.2));
+  } else if (strongCount >= 1 || detectedCount >= 4 || avgScore > 45) {
+    overallRiskLevel = 'high';
+    overallRiskScore = Math.min(85, Math.round(avgScore * 1.1));
+  } else if (detectedCount >= 2 || avgScore > 25) {
+    overallRiskLevel = 'medium';
+    overallRiskScore = Math.round(avgScore);
+  } else if (detectedCount >= 1) {
+    overallRiskLevel = 'low';
+    overallRiskScore = Math.round(avgScore * 0.8);
+  } else {
+    overallRiskLevel = 'safe';
+    overallRiskScore = Math.max(5, Math.round(avgScore * 0.5));
+  }
+
+  // ---- 系统综合分析 ----
+  const detectedSignals = signals.filter(s => s.detected);
+  const signalNames = detectedSignals.map(s => s.name);
+  const strongSignals = signals.filter(s => s.severity === 'strong').map(s => s.name);
+
+  let systemSummary: string;
+  if (overallRiskLevel === 'safe') {
+    systemSummary = '系统综合分析：所有信号均未触发风险阈值，内容整体安全可信。';
+  } else if (overallRiskLevel === 'low') {
+    systemSummary = `系统综合分析：触发${signalNames.length}个轻微信号（${signalNames.join('、')}），但风险程度较低，建议保持关注。`;
+  } else if (overallRiskLevel === 'medium') {
+    systemSummary = `系统综合分析：触发${signalNames.length}个风险信号（${signalNames.join('、')}），存在中等程度风险，建议核实来源。`;
+  } else if (overallRiskLevel === 'high') {
+    systemSummary = `系统综合分析：触发${signalNames.length}个风险信号，其中${strongSignals.length}个强信号（${strongSignals.join('、')}），风险较高，强烈建议通过官方渠道核实。`;
+  } else {
+    systemSummary = `⚠️ 系统综合分析：触发${signalNames.length}个风险信号，其中${strongSignals.length}个强信号（${strongSignals.join('、')}），极高风险！多个维度同时异常，极可能是虚假/误导内容。`;
+  }
+
+  return {
+    signals,
+    overallRiskLevel,
+    overallRiskScore,
+    categorySummary,
+    systemSummary,
+  };
+}
+
+/**
+ * UCAE 完整分析流程: 感知 → 检索 → 图片对比 → 验证 → 多信号聚合
  */
 export async function runFullPipeline(
   type: string,
@@ -530,8 +732,12 @@ export async function runFullPipeline(
     }
   }
 
+  // Phase 4: 多信号风险聚合
+  const multiSignalRisk = aggregateMultiSignalRisk(analysis, verification);
+
   return {
     ...analysis,
     verification,
+    multiSignalRisk,
   };
 }
