@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { chatCompletionStream, chatCompletion, AGENT_SYSTEM_PROMPT, type ChatMessage } from '@/lib/ai';
+import { deepseekChatStream, deepseekChat, type DeepSeekMessage } from '@/lib/deepseek';
+import { AGENT_SYSTEM_PROMPT } from '@/lib/ai';
 import { agentResponses } from '@/lib/mock-data';
 
 export async function POST(request: Request) {
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     // Build conversation history for context
-    const messages: ChatMessage[] = [
+    const messages: DeepSeekMessage[] = [
       { role: 'system', content: AGENT_SYSTEM_PROMPT },
     ];
 
@@ -31,9 +32,9 @@ export async function POST(request: Request) {
 
     messages.push({ role: 'user', content: message });
 
-    // Use streaming response
+    // Use DeepSeek streaming response
     try {
-      const stream = await chatCompletionStream({
+      const stream = await deepseekChatStream({
         messages,
         temperature: 0.7,
         max_tokens: 4096,
@@ -44,14 +45,14 @@ export async function POST(request: Request) {
           'Content-Type': 'text/plain; charset=utf-8',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
-          'X-Source': 'ai',
+          'X-Source': 'deepseek-agent',
         },
       });
     } catch (streamError) {
-      console.error('Streaming failed, falling back to non-streaming:', streamError);
+      console.error('DeepSeek streaming failed, falling back to non-streaming:', streamError);
 
       // Fallback: non-streaming response
-      const aiContent = await chatCompletion({
+      const aiContent = await deepseekChat({
         messages,
         temperature: 0.7,
         max_tokens: 4096,
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
           content: aiContent,
           timestamp: new Date().toISOString(),
         },
-        source: 'ai',
+        source: 'deepseek-agent',
       });
     }
   } catch (error) {
