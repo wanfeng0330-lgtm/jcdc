@@ -15,7 +15,6 @@ import {
   BarChart2,
   RefreshCw,
   AlertTriangle,
-  Radio,
   ScanFace,
   Network,
   CheckCircle2,
@@ -27,7 +26,7 @@ import {
 import PageContainer, { PageHeader } from '@/components/PageContainer';
 import BottomNav from '@/components/BottomNav';
 import { RiskGauge, RadarChart, RiskHeatMap } from '@/components/Charts';
-import { AnalysisSteps, AIFlowLine } from '@/components/AIAnimations';
+import { AIFlowLine } from '@/components/AIAnimations';
 import { mockAnalysisResult } from '@/lib/mock-data';
 import type { AnalysisResult } from '@/lib/mock-data';
 
@@ -44,7 +43,7 @@ const fileTypes: { type: FileType; icon: LucideIcon; label: string }[] = [
 
 type StepStatus = 'pending' | 'active' | 'done';
 
-const analysisSteps: { label: string; icon: LucideIcon; status: StepStatus }[] = [
+const initialSteps: { label: string; icon: LucideIcon; status: StepStatus }[] = [
   { label: 'OCR识别与文本提取', icon: Search, status: 'pending' },
   { label: 'AI风险特征分析', icon: Brain, status: 'pending' },
   { label: '情绪传播模式识别', icon: Drama, status: 'pending' },
@@ -57,18 +56,17 @@ export default function AnalyzePage() {
   const [phase, setPhase] = useState<AnalysisPhase>('idle');
   const [selectedType, setSelectedType] = useState<FileType>('image');
   const [inputText, setInputText] = useState('');
-  const [currentSteps, setCurrentSteps] = useState(analysisSteps);
+  const [currentSteps, setCurrentSteps] = useState(initialSteps);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeTab, setActiveTab] = useState<'score' | 'radar' | 'detail'>('score');
+  const [analysisSource, setAnalysisSource] = useState<string>('');
 
-  const startAnalysis = useCallback(() => {
-    setPhase('analyzing');
-    const steps = [...analysisSteps];
-    setCurrentSteps(steps.map((s) => ({ ...s, status: 'pending' as StepStatus })));
+  const advanceSteps = useCallback((onComplete: () => void) => {
+    setCurrentSteps(initialSteps.map((s) => ({ ...s, status: 'pending' as StepStatus })));
 
     let stepIndex = 0;
     const interval = setInterval(() => {
-      if (stepIndex < steps.length) {
+      if (stepIndex < initialSteps.length) {
         setCurrentSteps((prev) =>
           prev.map((s, i) => ({
             ...s,
@@ -79,19 +77,57 @@ export default function AnalyzePage() {
       } else {
         clearInterval(interval);
         setCurrentSteps((prev) => prev.map((s) => ({ ...s, status: 'done' as StepStatus })));
-        setTimeout(() => {
-          setResult(mockAnalysisResult);
-          setPhase('result');
-        }, 500);
+        onComplete();
       }
     }, 800);
   }, []);
+
+  const startAnalysis = useCallback(async () => {
+    setPhase('analyzing');
+    setAnalysisSource('');
+
+    // Run step animation and API call in parallel
+    const content = inputText.trim() || '';
+
+    advanceSteps(async () => {
+      try {
+        const response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: selectedType,
+            content,
+            text: content,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          setResult(data.data);
+          setAnalysisSource(data.source || 'unknown');
+        } else {
+          setResult(mockAnalysisResult);
+          setAnalysisSource('fallback');
+        }
+      } catch (error) {
+        console.error('Analysis API error:', error);
+        setResult(mockAnalysisResult);
+        setAnalysisSource('fallback');
+      }
+
+      setTimeout(() => {
+        setPhase('result');
+      }, 300);
+    });
+  }, [inputText, selectedType, advanceSteps]);
 
   const reset = useCallback(() => {
     setPhase('idle');
     setResult(null);
     setInputText('');
-    setCurrentSteps(analysisSteps);
+    setCurrentSteps(initialSteps);
+    setAnalysisSource('');
   }, []);
 
   const riskFactorIcons: Record<string, LucideIcon> = {
@@ -185,7 +221,7 @@ export default function AnalyzePage() {
                   disabled={!inputText.trim()}
                   className="w-full mt-2 py-2.5 rounded-xl bg-gradient-to-r from-accent to-cyan text-white text-sm font-medium disabled:opacity-30 transition-opacity"
                 >
-                  开始分析
+                  开始AI分析
                 </button>
               </div>
             )}
@@ -213,7 +249,7 @@ export default function AnalyzePage() {
             <div className="glass-card-sm p-4">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-semibold">AI分析进程</h3>
-                <span className="text-xs text-accent animate-pulse">进行中...</span>
+                <span className="text-xs text-accent animate-pulse">Qwen3-Omni 分析中...</span>
               </div>
               <AIFlowLine className="mb-4" />
               <div className="space-y-3">
@@ -256,7 +292,7 @@ export default function AnalyzePage() {
 
             {/* Live Data Stream */}
             <div className="glass-card-sm p-4">
-              <h3 className="text-xs text-muted mb-3">数据流</h3>
+              <h3 className="text-xs text-muted mb-3">数据流 · Qwen3-Omni-30B-A3B</h3>
               <div className="font-mono text-[10px] text-accent/60 space-y-1">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <motion.div
@@ -282,6 +318,18 @@ export default function AnalyzePage() {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-4"
           >
+            {/* Source Badge */}
+            {analysisSource === 'ai' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20"
+              >
+                <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                <span className="text-[11px] text-accent font-medium">Qwen3-Omni 实时分析结果</span>
+              </motion.div>
+            )}
+
             {/* Score Overview */}
             <div className="glass-card-sm p-5 text-center">
               <RiskGauge value={result.credibilityScore} label="内容可信度评分" />

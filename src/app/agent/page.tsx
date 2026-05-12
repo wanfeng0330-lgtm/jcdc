@@ -1,11 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Shield } from 'lucide-react';
 import PageContainer, { PageHeader } from '@/components/PageContainer';
 import BottomNav from '@/components/BottomNav';
-import { agentResponses } from '@/lib/mock-data';
 
 interface Message {
   id: string;
@@ -13,6 +12,7 @@ interface Message {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  source?: 'ai' | 'fallback' | 'demo';
 }
 
 const quickPrompts = [
@@ -30,11 +30,13 @@ export default function AgentPage() {
       role: 'assistant',
       content: '你好，我是识界AI风险解释助手。我可以帮你分析信息风险，从传播学视角解释认知偏差，提供防骗建议。有什么想了解的吗？',
       timestamp: new Date(),
+      source: 'demo',
     },
   ]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -42,33 +44,7 @@ export default function AgentPage() {
     }
   }, [messages]);
 
-  const simulateStreaming = (text: string, messageId: string) => {
-    setIsStreaming(true);
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < text.length) {
-        const chunkSize = Math.min(Math.floor(Math.random() * 3) + 1, text.length - index);
-        const chunk = text.slice(0, index + chunkSize);
-        index += chunkSize;
-
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId ? { ...m, content: chunk, isStreaming: true } : m
-          )
-        );
-      } else {
-        clearInterval(interval);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId ? { ...m, isStreaming: false } : m
-          )
-        );
-        setIsStreaming(false);
-      }
-    }, 30);
-  };
-
-  const sendMessage = (text: string) => {
+  const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
     const userMsg: Message = {
@@ -89,12 +65,100 @@ export default function AgentPage() {
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setInput('');
+    setIsStreaming(true);
 
-    setTimeout(() => {
-      const response = agentResponses.default;
-      simulateStreaming(response, assistantId);
-    }, 800);
-  };
+    // Build history for context (exclude current user message and empty assistant)
+    const history = messages
+      .filter((m) => m.content.trim())
+      .slice(-10)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: text.trim(),
+          history,
+        }),
+        signal: controller.signal,
+      });
+
+      // Check if response is streaming (text/plain) or JSON
+      const contentType = response.headers.get('Content-Type') || '';
+      const source = (response.headers.get('X-Source') as Message['source']) || 'ai';
+
+      if (contentType.includes('text/plain')) {
+        // Streaming response
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('No reader');
+
+        const decoder = new TextDecoder();
+        let accumulated = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = decoder.decode(value, { stream: true });
+          accumulated += chunk;
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantId
+                ? { ...m, content: accumulated, isStreaming: true, source }
+                : m
+            )
+          );
+        }
+
+        // Streaming complete
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, isStreaming: false, source }
+              : m
+          )
+        );
+      } else {
+        // JSON response (fallback)
+        const data = await response.json();
+        const content = data?.data?.content || data?.data || '';
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content, isStreaming: false, source: data?.source || 'fallback' }
+              : m
+          )
+        );
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      // If streaming was aborted, don't show error
+      if ((error as Error).name === 'AbortError') return;
+
+      // Show error in message
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantId
+            ? {
+                ...m,
+                content: '抱歉，AI服务暂时不可用。请稍后重试。\n\n你可以继续提问，我会尽力帮助你分析信息风险。',
+                isStreaming: false,
+                source: 'fallback',
+              }
+            : m
+        )
+      );
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+    }
+  }, [isStreaming, messages]);
 
   const renderContent = (content: string) => {
     return content.split('\n').map((line, i) => {
@@ -197,6 +261,12 @@ export default function AgentPage() {
                     {msg.isStreaming && msg.content && (
                       <span className="typing-cursor" />
                     )}
+                    {/* Source indicator */}
+                    {!msg.isStreaming && msg.source === 'ai' && (
+                      <div className="mt-2 pt-1 border-t border-white/5 text-[9px] text-accent/50">
+                        ✓ AI实时分析
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <span className="text-sm">{msg.content}</span>
@@ -235,7 +305,8 @@ export default function AgentPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
                 onClick={() => sendMessage(prompt)}
-                className="text-[11px] px-3 py-1.5 rounded-full glass-card-sm text-foreground/70 hover:text-accent transition-colors"
+                disabled={isStreaming}
+                className="text-[11px] px-3 py-1.5 rounded-full glass-card-sm text-foreground/70 hover:text-accent transition-colors disabled:opacity-50"
               >
                 {prompt}
               </motion.button>
@@ -250,7 +321,7 @@ export default function AgentPage() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && sendMessage(input)}
+            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage(input)}
             placeholder="描述你遇到的信息风险场景..."
             className="flex-1 bg-transparent text-sm text-foreground/80 placeholder-muted/50 outline-none py-1"
             disabled={isStreaming}

@@ -1,38 +1,85 @@
 import { NextResponse } from 'next/server';
+import { chatCompletionStream, chatCompletion, AGENT_SYSTEM_PROMPT, type ChatMessage } from '@/lib/ai';
+import { agentResponses } from '@/lib/mock-data';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { message } = body;
+    const { message, history } = body;
 
-    // 模拟AI响应
-    const response = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      content: `我来帮你分析这个情况。
+    if (!message?.trim()) {
+      return NextResponse.json(
+        { success: false, error: '消息不能为空' },
+        { status: 400 }
+      );
+    }
 
-**风险分析**
-这是一个典型的AI拟声诈骗场景。AI语音克隆技术已经非常成熟，只需几秒的语音样本就能生成高度逼真的合成语音。
+    // Build conversation history for context
+    const messages: ChatMessage[] = [
+      { role: 'system', content: AGENT_SYSTEM_PROMPT },
+    ];
 
-**可信度解释**
-从传播学角度来看，这种诈骗利用了以下认知偏差：
-- **权威偏差**：倾向于相信来自"家人"的信息
-- **紧迫效应**：紧急情况会降低理性判断能力
-- **情感绑架**：亲情关系被恶意利用
+    // Add history if provided
+    if (Array.isArray(history)) {
+      for (const msg of history.slice(-10)) {
+        messages.push({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content,
+        });
+      }
+    }
 
-**操作建议**
-1. 挂断电话，通过其他方式联系本人确认
-2. 设置家庭暗号，用于验证身份
-3. 开通银行转账延迟到账功能
-4. 向公安机关报案并保存录音证据`,
-      timestamp: new Date().toISOString(),
-    };
+    messages.push({ role: 'user', content: message });
 
-    return NextResponse.json({ success: true, data: response });
-  } catch {
-    return NextResponse.json(
-      { success: false, error: '响应失败，请重试' },
-      { status: 500 }
-    );
+    // Use streaming response
+    try {
+      const stream = await chatCompletionStream({
+        messages,
+        temperature: 0.7,
+        max_tokens: 4096,
+      });
+
+      return new Response(stream, {
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'X-Source': 'ai',
+        },
+      });
+    } catch (streamError) {
+      console.error('Streaming failed, falling back to non-streaming:', streamError);
+
+      // Fallback: non-streaming response
+      const aiContent = await chatCompletion({
+        messages,
+        temperature: 0.7,
+        max_tokens: 4096,
+      });
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          id: Date.now().toString(),
+          role: 'assistant',
+          content: aiContent,
+          timestamp: new Date().toISOString(),
+        },
+        source: 'ai',
+      });
+    }
+  } catch (error) {
+    console.error('Chat API error:', error);
+    // Final fallback to mock data
+    return NextResponse.json({
+      success: true,
+      data: {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: agentResponses.default,
+        timestamp: new Date().toISOString(),
+      },
+      source: 'fallback',
+    });
   }
 }

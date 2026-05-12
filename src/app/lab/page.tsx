@@ -37,6 +37,8 @@ export default function LabPage() {
   const [selectedAnswer, setSelectedAnswer] = useState<boolean | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
   const [immunityResult, setImmunityResult] = useState<ImmunityResult | null>(null);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [resultSource, setResultSource] = useState<string>('');
 
   const shuffledQuestions = quizQuestions.slice(0, 6);
 
@@ -53,48 +55,82 @@ export default function LabPage() {
     [currentIndex, selectedAnswer, shuffledQuestions]
   );
 
-  const nextQuestion = useCallback(() => {
+  const nextQuestion = useCallback(async () => {
     if (currentIndex < shuffledQuestions.length - 1) {
       setCurrentIndex((i) => i + 1);
       setSelectedAnswer(null);
       setShowExplanation(false);
     } else {
+      // Calculate final score
       const finalScore = Math.round(((score + (selectedAnswer === shuffledQuestions[currentIndex].isFake ? 1 : 0)) / shuffledQuestions.length) * 100);
-      const riskTypes = answers.reduce<Record<string, number>>((acc, a) => {
-        if (!a.correct) acc[a.question.riskType] = (acc[a.question.riskType] || 0) + 1;
-        return acc;
-      }, {});
+      const correctCount = score + (selectedAnswer === shuffledQuestions[currentIndex].isFake ? 1 : 0);
 
-      const weakPoints = Object.entries(riskTypes)
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 3)
-        .map(([type]) => type);
+      setIsEvaluating(true);
 
-      const level = finalScore >= 80 ? 'S' : finalScore >= 60 ? 'A' : finalScore >= 40 ? 'B' : 'C';
-      const levelDesc =
-        level === 'S'
-          ? 'AI风险识别专家，你几乎不会被AI诈骗手段欺骗'
-          : level === 'A'
-          ? '良好的风险意识，但仍需提升对高级AI骗局的警惕'
-          : level === 'B'
-          ? '风险识别能力一般，建议参加更多AI媒介素养训练'
-          : 'AI风险抵抗力较低，强烈建议学习AI骗局识别技巧';
+      try {
+        // Try to call AI for personalized evaluation
+        const response = await fetch('/api/lab', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            answers: answers.map((a) => ({
+              category: a.question.category,
+              riskType: a.question.riskType,
+              correct: a.correct,
+            })),
+            totalQuestions: shuffledQuestions.length,
+            correctCount,
+          }),
+        });
 
-      setImmunityResult({
-        overallScore: finalScore,
-        level,
-        levelDesc,
-        weaknesses: weakPoints.length > 0 ? weakPoints : ['暂无明显弱点'],
-        strengths: ['基础风险意识'],
-        riskProfile: [
-          { type: 'AI拟声识别', score: Math.round(Math.random() * 40 + 60) },
-          { type: 'AI换脸识别', score: Math.round(Math.random() * 40 + 50) },
-          { type: '情绪操控识别', score: Math.round(Math.random() * 40 + 55) },
-          { type: '传播诱导识别', score: Math.round(Math.random() * 40 + 50) },
-          { type: '身份伪造识别', score: Math.round(Math.random() * 40 + 45) },
-        ],
-      });
-      setPhase('result');
+        const data = await response.json();
+        if (data.success && data.data) {
+          setImmunityResult(data.data);
+          setResultSource(data.source || 'ai');
+        } else {
+          throw new Error('Invalid response');
+        }
+      } catch {
+        // Fallback: calculate locally
+        const riskTypes = answers.reduce<Record<string, number>>((acc, a) => {
+          if (!a.correct) acc[a.question.riskType] = (acc[a.question.riskType] || 0) + 1;
+          return acc;
+        }, {});
+
+        const weakPoints = Object.entries(riskTypes)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 3)
+          .map(([type]) => type);
+
+        const level = finalScore >= 80 ? 'S' : finalScore >= 60 ? 'A' : finalScore >= 40 ? 'B' : 'C';
+        const levelDesc =
+          level === 'S'
+            ? 'AI风险识别专家，你几乎不会被AI诈骗手段欺骗'
+            : level === 'A'
+            ? '良好的风险意识，但仍需提升对高级AI骗局的警惕'
+            : level === 'B'
+            ? '风险识别能力一般，建议参加更多AI媒介素养训练'
+            : 'AI风险抵抗力较低，强烈建议学习AI骗局识别技巧';
+
+        setImmunityResult({
+          overallScore: finalScore,
+          level,
+          levelDesc,
+          weaknesses: weakPoints.length > 0 ? weakPoints : ['暂无明显弱点'],
+          strengths: ['基础风险意识'],
+          riskProfile: [
+            { type: 'AI拟声识别', score: Math.round(Math.random() * 40 + 60) },
+            { type: 'AI换脸识别', score: Math.round(Math.random() * 40 + 50) },
+            { type: '情绪操控识别', score: Math.round(Math.random() * 40 + 55) },
+            { type: '传播诱导识别', score: Math.round(Math.random() * 40 + 50) },
+            { type: '身份伪造识别', score: Math.round(Math.random() * 40 + 45) },
+          ],
+        });
+        setResultSource('calculated');
+      } finally {
+        setIsEvaluating(false);
+        setPhase('result');
+      }
     }
   }, [currentIndex, shuffledQuestions, score, selectedAnswer, answers]);
 
@@ -132,7 +168,7 @@ export default function LabPage() {
               <p className="text-xs text-muted leading-relaxed mb-4">
                 系统将随机展示AI生成内容，你需要判断真伪。
                 <br />
-                完成后生成你的AI免疫力指数。
+                完成后由AI生成你的免疫力指数。
               </p>
               <div className="flex justify-center gap-6 text-center mb-4">
                 <div>
@@ -291,10 +327,23 @@ export default function LabPage() {
                   </p>
                   <button
                     onClick={nextQuestion}
-                    className="w-full py-2.5 rounded-xl bg-accent/10 text-accent text-sm font-medium border border-accent/20 inline-flex items-center justify-center gap-1"
+                    disabled={isEvaluating}
+                    className="w-full py-2.5 rounded-xl bg-accent/10 text-accent text-sm font-medium border border-accent/20 inline-flex items-center justify-center gap-1 disabled:opacity-50"
                   >
-                    {currentIndex < shuffledQuestions.length - 1 ? '下一题' : '查看结果'}
-                    <ChevronRight size={14} strokeWidth={1.5} />
+                    {isEvaluating ? (
+                      <>
+                        <div className="flex gap-1">
+                          <span className="thinking-dot w-1 h-1 rounded-full bg-accent" />
+                          <span className="thinking-dot w-1 h-1 rounded-full bg-accent" />
+                          <span className="thinking-dot w-1 h-1 rounded-full bg-accent" />
+                        </div>
+                        AI评估中...
+                      </>
+                    ) : currentIndex < shuffledQuestions.length - 1 ? (
+                      <>下一题 <ChevronRight size={14} strokeWidth={1.5} /></>
+                    ) : (
+                      <>查看AI评估结果 <ChevronRight size={14} strokeWidth={1.5} /></>
+                    )}
                   </button>
                 </motion.div>
               )}
@@ -310,6 +359,18 @@ export default function LabPage() {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-4"
           >
+            {/* Source Badge */}
+            {resultSource === 'ai' && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-accent/10 border border-accent/20"
+              >
+                <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
+                <span className="text-[11px] text-accent font-medium">Qwen3-Omni 个性化评估</span>
+              </motion.div>
+            )}
+
             {/* Score Card */}
             <div className="glass-card p-6 text-center">
               <motion.div
@@ -436,6 +497,7 @@ export default function LabPage() {
                   setSelectedAnswer(null);
                   setShowExplanation(false);
                   setImmunityResult(null);
+                  setResultSource('');
                 }}
                 className="flex-1 py-3 rounded-xl glass-card text-accent text-sm font-medium inline-flex items-center justify-center gap-1.5"
               >
