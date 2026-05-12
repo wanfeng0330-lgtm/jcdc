@@ -41,12 +41,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# database
-prisma/dev.db
-prisma/dev.db-journal
-*.db
-
-# generated prisma client (regenerated on build)
-src/generated/
-
-/src/generated/prisma
+# cloudflare
+.wrangler/
+.vercel/

@@ -121,7 +121,12 @@ export async function downloadImageAsBase64(imageUrl: string): Promise<string | 
     const arrayBuffer = await response.arrayBuffer();
     if (arrayBuffer.byteLength > 4 * 1024 * 1024) return null;
 
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    const base64 = btoa(binary);
     return `data:${contentType};base64,${base64}`;
   } catch (error) {
     console.error('Image download error:', imageUrl, error);
